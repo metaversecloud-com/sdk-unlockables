@@ -8,7 +8,7 @@ export const getDroppedAsset = async (credentials: Credentials): Promise<IDroppe
     const { assetId, urlSlug } = credentials;
 
     const droppedAsset = await DroppedAsset.get(assetId, urlSlug, { credentials }) as IDroppedAsset;
-    await initializeDroppedAssetDataObject(droppedAsset);
+    await initializeDroppedAssetDataObject(droppedAsset, assetId);
 
     if (!droppedAsset) throw "Dropped asset not found";
 

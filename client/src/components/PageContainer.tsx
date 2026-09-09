@@ -20,10 +20,7 @@ export const PageContainer = ({
   if (isLoading) return <Loading />;
 
   return (
-    <div className={`relative min-h-screen font-body ${showSettings ? "bg-admin" : "bg-student"}`}>
-      {/* Floating decorative shape (student view only) */}
-      {!showSettings && <div className="floating-diamond" style={{ top: "20%", right: "8%" }} />}
-
+    <div className={`relative min-h-screen font-body ${showSettings ? "bg-admin" : "bg-home"}`}>
       <div className="relative z-10 max-w-lg mx-auto px-4 py-6 pb-28">
         {visitor?.isAdmin && (
           <div>

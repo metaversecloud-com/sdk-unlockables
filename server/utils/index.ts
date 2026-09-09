@@ -1,4 +1,7 @@
+export * from "./badges/index.js";
 export * from "./droppedAssets/index.js";
+export * from "./drops/index.js";
+export * from "./grants/index.js";
 export * from "./visitors/index.js";
 export * from "./cleanReturnPayload.js";
 export * from "./errorHandler.js";
@@ -6,3 +9,4 @@ export * from "./getCredentials.js";
 export * from "./getVersion.js";
 export * from "./inventoryCache.js";
 export * from "./topiaInit.js";
+export * from "./uploadEmotePreview.js";

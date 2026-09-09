@@ -4,6 +4,11 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // The SDK stylesheet scopes its resets under `.rtsdk` (on <body>), giving rules like
+  // `.rtsdk p { color; font-size; font-weight; ... }` a specificity of (0,1,1) — which beats every
+  // bare Tailwind utility at (0,1,0). Generating utilities as `.rtsdk .text-xs` lifts them to (0,2,0)
+  // so they win, instead of silently losing on every <p>, <h*> and .card in the app.
+  important: ".rtsdk",
   theme: {
     extend: {
       fontFamily: {
@@ -28,6 +33,7 @@ export default {
         parchment: '#FAF7F2',
         ink: '#1E293B',
         'ink-soft': '#64748B',
+        'ink-muted': '#9BABC0',
         success: {
           DEFAULT: '#059669',
           bg: '#D1FAE5',

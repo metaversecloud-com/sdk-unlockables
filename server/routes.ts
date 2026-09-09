@@ -2,10 +2,13 @@ import express from "express";
 
 import { getVersion } from "./utils/getVersion.js";
 import {
-  handleUnlockAttempt,
-  handleUnlockConfig,
-  handleGetUnlockables,
+  handleDeleteDrop,
+  handleDuplicateDrop,
+  handleGetDrops,
   handleGetGameState,
+  handleGetUnlockables,
+  handleSaveDrop,
+  handleUnlockAttempt,
 } from "./controllers/index.js";
 
 const router = express.Router();
@@ -33,7 +36,13 @@ router.get("/system/health", (req, res) => {
 
 router.get("/game-state", handleGetGameState);
 router.post("/unlock/attempt", handleUnlockAttempt);
-router.post("/unlock/config", handleUnlockConfig);
+
+// Admin — every handler below gates on visitor.isAdmin
+router.get("/drops", handleGetDrops);
+router.post("/drops", handleSaveDrop);
+router.put("/drops/:dropId", handleSaveDrop);
+router.delete("/drops/:dropId", handleDeleteDrop);
+router.post("/drops/:dropId/duplicate", handleDuplicateDrop);
 router.get("/unlockables", handleGetUnlockables);
 
 export default router;

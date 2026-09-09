@@ -1,6 +1,13 @@
 import { Request, Response } from "express";
 import { InventoryItemInterface } from "@rtsdk/topia";
-import { errorHandler, getCredentials, getCachedInventoryItems, Visitor } from "../utils/index.js";
+import {
+  DEFAULT_ICONS,
+  errorHandler,
+  getBadges,
+  getCachedInventoryItems,
+  getCredentials,
+  requireAdmin,
+} from "../utils/index.js";
 
 interface UnlockableInventoryItem extends InventoryItemInterface {
   metadata?: {
@@ -18,61 +25,56 @@ interface Expression {
   type: string;
 }
 
+/**
+ * Everything the drop editor can offer as a reward: unlockable emotes, accessory packs, and badges.
+ */
 export const handleGetUnlockables = async (req: Request, res: Response) => {
   try {
     const credentials = getCredentials(req.query);
-    const { visitorId, urlSlug } = credentials;
     const forceRefresh = req.query.forceRefreshInventory === "true";
 
-    // Fetch emotes and inventory items in parallel using cache
-    const [visitor, allInventoryItems] = await Promise.all([
-      Visitor.get(visitorId, urlSlug, { credentials }),
+    const visitor = await requireAdmin(credentials, res);
+    if (!visitor) return;
+
+    const [allInventoryItems, badges] = await Promise.all([
       getCachedInventoryItems({ credentials, forceRefresh }) as Promise<UnlockableInventoryItem[]>,
+      getBadges(credentials, forceRefresh),
     ]);
 
     const availableExpressions = (await visitor.getExpressions({ getUnlockablesOnly: true })) as Expression[];
 
-    // Map emotes
     const emotes = availableExpressions.map((expression) => ({
       id: expression.id,
       name: expression.name,
       type: expression.type,
-      previewUrl: expression.expressionImage || `/default-emote-icon.svg`,
+      previewUrl: expression.expressionImage || DEFAULT_ICONS.emote,
     }));
 
-    // Get packs (AVATAR_ACCESSORY_PACK)
     const packItems = allInventoryItems?.filter((item) => item.type === "AVATAR_ACCESSORY_PACK") || [];
-
-    // Get individual accessories (ACCESSORY)
     const accessories = allInventoryItems?.filter((item) => item.type === "ACCESSORY") || [];
 
-    // Build packs with their individual accessories grouped by packId
     const packs = packItems.map((pack) => {
       const packId = pack.metadata?.packId;
       const packAccessories = accessories
-        .filter((acc) => acc.metadata?.packId === packId)
-        .map((acc) => ({
-          id: acc.id,
-          name: acc.metadata?.displayName || acc.name,
-          category: acc.metadata?.category || "",
-          previewUrl: acc.image_path || "/default-accessory-icon.svg",
+        .filter((accessory) => accessory.metadata?.packId === packId)
+        .map((accessory) => ({
+          id: accessory.id,
+          name: accessory.metadata?.displayName || accessory.name,
+          category: accessory.metadata?.category || "",
+          previewUrl: accessory.image_path || DEFAULT_ICONS.accessory,
         }));
 
       return {
         id: pack.id,
         name: pack.name,
         description: pack.description || "",
-        previewUrl: pack.image_path || "/default-accessory-icon.svg",
+        previewUrl: pack.image_path || DEFAULT_ICONS.accessory,
         packId,
         accessories: packAccessories,
       };
     });
 
-    return res.json({
-      emotes,
-      packs,
-      success: true,
-    });
+    return res.json({ emotes, packs, badges, success: true });
   } catch (error) {
     return errorHandler({
       error,

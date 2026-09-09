@@ -2,11 +2,11 @@
 <img src="https://global-uploads.webflow.com/62e7004a0f9b3a63b980ac3c/62e70c84dd3aac06fb2ac2b6_topia-logo-blue-2x.png" style="width: 120px; margin-bottom: 20px" alt="Topia logo">
 </div>
 
-# Emote Unlock
+# Unlockables
 
 ## Introduction / Summary
 
-Emote Unlock lets an admin turn any dropped asset in a Topia world into a challenge that grants the visitor either a **custom emote expression** or one or more **avatar accessories** once they answer correctly. The admin picks the item, writes a question, chooses a question type (text answer, open response, multiple choice, or all-that-apply), and saves. Visitors who click the asset see the item preview and the question; on a correct answer the server calls `visitor.grantExpression` (for emotes) or `ecosystem.fetchInventoryItems` + `visitor.grantInventoryItem` (for accessories), fires a Sparkle particle burst, and shows a "Congrats!" toast. Wrong answers increment a shared attempts counter and return a randomized retry message; the client shakes the card without opening the global error toast.
+Unlockables lets an admin turn any dropped asset in a Topia world into a challenge that grants the visitor either a **custom emote expression** or one or more **avatar accessories** once they answer correctly. The admin picks the item, writes a question, chooses a question type (text answer, open response, multiple choice, or all-that-apply), and saves. Visitors who click the asset see the item preview and the question; on a correct answer the server calls `visitor.grantExpression` (for emotes) or `ecosystem.fetchInventoryItems` + `visitor.grantInventoryItem` (for accessories), fires a Sparkle particle burst, and shows a "Congrats!" toast. Wrong answers increment a shared attempts counter and return a randomized retry message; the client shakes the card without opening the global error toast.
 
 All state lives on a single dropped-asset data object — one challenge per dropped asset — so multiple challenges can coexist in the same world by dropping the app multiple times.
 
@@ -37,7 +37,7 @@ Access via the gear icon in `PageContainer` — visible only when `visitor.isAdm
 - **Question / Description** — free-text prompt shown to visitors.
 - **Question Type** — one of `text`, `open_text`, `multiple_choice`, `all_that_apply`. Switching type resets the answer fields.
 - **Answer fields** — text input (single answer), option builder (2+ options, at least one marked correct via a green checkmark button), or nothing (for `open_text`).
-- **Engagement panel** — collapsible summary that shows: current configuration (type, item, question type, answer), attempt/unlock counts, and — for `open_text` — a table of every student response (`displayName`, response text, sorted by `respondedAt` desc).
+- **Engagement panel** — collapsible summary that shows: current configuration (type, item, question type, answer), attempt/unlock counts, and — for `open_text` — a table of every response (`displayName`, response text, sorted by `respondedAt` desc).
 - **Force refresh** — appending `?forceRefreshInventory=true` to the iframe URL calls `/unlockables` with a cache-busting flag; the 6-hour in-memory `inventoryCache` is cleared on that request.
 
 ## Required Assets with Unique Names
@@ -137,7 +137,7 @@ All analytics events are emitted via the `analytics: [...]` option on `updateDat
 | Effect                                      | Fires when                                                                |
 | ------------------------------------------- | ------------------------------------------------------------------------- |
 | `Sparkle` particle on visitor (duration 3s) | Emote or accessory successfully granted (not on 409 already-owned).       |
-| Toast: `Congrats! Emote Unlocked`           | Emote granted (non-409 response from `grantExpression`).                  |
+| Toast: `Congrats! Unlockablesed`            | Emote granted (non-409 response from `grantExpression`).                  |
 | Toast: `Congrats! Accessories Unlocked`     | One or more accessories granted successfully.                             |
 | Toast: `Already Unlocked`                   | `grantExpression` returned 409, or accessory grant threw with status 409. |
 

@@ -3,6 +3,7 @@ export const SET_INTERACTIVE_PARAMS = "SET_INTERACTIVE_PARAMS";
 export const SET_GAME_STATE = "SET_GAME_STATE";
 export const SET_ERROR = "SET_ERROR";
 export const SET_VISITOR = "SET_VISITOR";
+export const SET_UNLOCKED_THIS_SESSION = "SET_UNLOCKED_THIS_SESSION";
 
 export type InteractiveParams = {
   assetId: string;
@@ -11,10 +12,148 @@ export type InteractiveParams = {
   interactiveNonce: string;
   interactivePublicKey: string;
   profileId: string;
+  sceneDropId: string;
   uniqueName: string;
   urlSlug: string;
   username: string;
   visitorId: string;
+};
+
+export type UnlockType = "emote" | "accessory" | "badge";
+
+export type QuestionType = "text" | "open_text" | "multiple_choice" | "all_that_apply";
+
+export type DropState = "always" | "live" | "upcoming" | "ended";
+
+export type UpcomingDisplay = "item" | "mystery";
+
+export type AccessoryPreview = {
+  id: string;
+  name: string;
+  previewUrl: string;
+  category?: string;
+};
+
+/**
+ * A drop as returned by GET /game-state — what the server decided this user may see. Answers are never included
+ */
+export interface DropType {
+  id: string;
+  state: DropState;
+  unlockType: UnlockType;
+
+  itemName?: string;
+  itemPreviewUrl?: string;
+  accessories?: AccessoryPreview[];
+
+  itemDescription?: string;
+  questionType?: QuestionType;
+  options?: string[];
+  unlockCount?: number;
+
+  startDate?: string | null;
+  endDate?: string | null;
+
+  /** Non-Admin User facing only — the admin equivalents are `upcomingDisplay` and per-visitor claims. */
+  mystery?: boolean;
+  claimed?: boolean;
+}
+
+/** The four bands returned by GET /game-state. */
+export type GameStateType = {
+  upcoming?: DropType[];
+  recentDrops?: DropType[];
+  active?: DropType[];
+  timezone?: string;
+  today?: string;
+};
+
+/** What the user just won, keyed by drop id, for this drawer session only. */
+export type SessionUnlock = {
+  dropId: string;
+  grantedNames?: string[];
+  alreadyOwned?: boolean;
+};
+
+// ---- admin ----------------------------------------------------------------------------------
+
+export type DropStats = {
+  attempts: number;
+  unlockCount: number;
+};
+
+export type DropResponse = {
+  displayName: string;
+  response: string;
+  respondedAt: string;
+};
+
+/**
+ * The full drop configuration as returned by GET /drops — admin-only, and unlike `DropType` it
+ * includes the answer (`password` / `correctAnswers`).
+ *
+ * Inherits `id`, `state`, `unlockType`, `itemName`, `itemPreviewUrl`, `itemDescription`,
+ * `questionType`, `options`, `startDate`, `endDate` and `accessories` from `DropType`, narrowing
+ * `itemDescription` and `questionType` to required since a stored drop always has both.
+ */
+export interface AdminDropType extends DropType {
+  itemId?: string;
+
+  packId?: string;
+  accessoryIds?: string[];
+
+  badgeId?: string;
+  badgeName?: string;
+  badgeIcon?: string;
+
+  itemDescription: string;
+  questionType: QuestionType;
+
+  password?: string;
+  correctAnswers?: number[];
+
+  showInUpcoming: boolean;
+  upcomingDisplay: UpcomingDisplay;
+
+  createdAt: string;
+  updatedAt: string;
+
+  stats: DropStats;
+  responses?: { [profileId: string]: DropResponse };
+
+  // Added by GET /drops for display.
+  isConfigured?: boolean;
+  resolvedItemName?: string;
+  resolvedItemPreviewUrl?: string;
+}
+
+export type EmoteOption = {
+  id: string;
+  name: string;
+  type: string;
+  previewUrl: string;
+};
+
+export type AccessoryPackOption = {
+  id: string;
+  name: string;
+  description: string;
+  previewUrl: string;
+  packId?: string;
+  accessories: AccessoryPreview[];
+};
+
+export type BadgeOption = {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+};
+
+export type UnlockablesType = {
+  emotes: EmoteOption[];
+  packs: AccessoryPackOption[];
+  badges: BadgeOption[];
 };
 
 export interface InitialState {
@@ -23,6 +162,7 @@ export interface InitialState {
   hasInteractiveParams?: boolean;
   hasSetupBackend?: boolean;
   profileId?: string;
+  unlockedThisSession?: { [dropId: string]: SessionUnlock };
   visitor?: {
     isAdmin: boolean;
   };
@@ -30,49 +170,7 @@ export interface InitialState {
 
 export type ActionType = {
   type: string;
-  payload: InitialState;
-};
-
-export type QuestionType = "text" | "open_text" | "multiple_choice" | "all_that_apply";
-
-export type EcosystemAccessory = {
-  id: string;
-  name: string;
-  previewUrl: string;
-  category?: string;
-};
-
-export type GameStateType = {
-  // New generic fields
-  unlockType?: "emote" | "accessory";
-  itemId?: string;
-  itemName?: string;
-  itemPreviewUrl?: string;
-  itemDescription?: string;
-  isItemUnlocked?: boolean;
-
-  // Accessory multi-select fields
-  packId?: string;
-  accessoryIds?: string[];
-  ecosystemAccessories?: EcosystemAccessory[];
-
-  // Legacy fields (for backwards compatibility)
-  emoteId?: string;
-  emoteName?: string;
-  emotePreviewUrl?: string;
-  emoteDescription?: string;
-  isEmoteUnlocked?: boolean;
-
-  // Question/answer fields
-  questionType?: QuestionType;
-  password?: string;
-  options?: string[];
-  correctAnswers?: number[];
-  stats?: {
-    attempts?: number;
-    successfulUnlocks?: { [profileId: string]: { unlockedAt: string; displayName?: string } };
-    responses?: { [profileId: string]: { displayName: string; response: string; respondedAt: string } };
-  };
+  payload: InitialState & { sessionUnlock?: SessionUnlock };
 };
 
 export type ErrorType =

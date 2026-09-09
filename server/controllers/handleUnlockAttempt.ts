@@ -1,70 +1,75 @@
 import { Request, Response } from "express";
-import { errorHandler, getCredentials, getDroppedAsset, getVisitor, Ecosystem } from "../utils/index.js";
+import {
+  DEFAULT_TIMEZONE,
+  errorHandler,
+  evaluateAnswer,
+  getCredentials,
+  getDroppedAsset,
+  getDropState,
+  getVisitor,
+  getVisitorClaims,
+  grantDropReward,
+  hasClaimedDrop,
+  isDropClaimable,
+  isDropConfigured,
+  recordVisitorClaim,
+  todayInTimezone,
+} from "../utils/index.js";
 
 export const handleUnlockAttempt = async (req: Request, res: Response) => {
   try {
     const credentials = getCredentials(req.query);
-    const { displayName, profileId, urlSlug } = credentials;
-    const { password, selectedAnswers } = req.body;
+    const { assetId, displayName, profileId, urlSlug } = credentials;
+    const { dropId, password, selectedAnswers } = req.body;
+
+    if (!dropId) return res.status(400).json({ success: false, message: "Missing dropId" });
 
     const droppedAsset = await getDroppedAsset(credentials);
-    const unlockData = droppedAsset.dataObject as any;
+    const dataObject = droppedAsset.dataObject;
+    const drop = dataObject.drops?.[dropId];
 
-    // Detect unlock type with backwards compatibility
-    const unlockType = unlockData.unlockType || "emote";
-    const itemId = unlockData.itemId || unlockData.emoteId;
-
-    // Validate answer based on question type
-    const questionType = unlockData.questionType || "text";
-    let isCorrect = false;
-
-    if (questionType === "open_text") {
-      // Any non-empty response is accepted
-      isCorrect = !!(password && password.trim());
-    } else if (questionType === "text") {
-      if (password && unlockData.password) {
-        isCorrect = password.trim().toLowerCase() === unlockData.password.trim().toLowerCase();
-      }
-    } else if (questionType === "multiple_choice") {
-      if (Array.isArray(selectedAnswers) && selectedAnswers.length === 1 && Array.isArray(unlockData.correctAnswers)) {
-        isCorrect = selectedAnswers[0] === unlockData.correctAnswers[0];
-      }
-    } else if (questionType === "all_that_apply") {
-      if (Array.isArray(selectedAnswers) && Array.isArray(unlockData.correctAnswers)) {
-        const sortedSelected = [...selectedAnswers].sort();
-        const sortedCorrect = [...unlockData.correctAnswers].sort();
-        isCorrect =
-          sortedSelected.length === sortedCorrect.length &&
-          sortedSelected.every((val: number, idx: number) => val === sortedCorrect[idx]);
-      }
+    if (!drop) return res.status(404).json({ success: false, message: "That challenge no longer exists." });
+    if (!isDropConfigured(drop)) {
+      return res.status(400).json({ success: false, message: "This challenge isn't ready yet." });
     }
 
-    // Build update payload to make a single updateDataObject call per path
-    const dataUpdate: Record<string, any> = {
-      ["stats.attempts"]: (unlockData.stats.attempts || 0) + 1,
-    };
+    // The window is re-checked here, not just in the feed: a client could post the id of an upcoming
+    // or ended drop to claim it outside its window.
+    const today = todayInTimezone(dataObject.timezone || DEFAULT_TIMEZONE);
+    const state = getDropState(drop, today);
+    if (!isDropClaimable(state)) {
+      return res.status(400).json({ success: false, message: "This challenge isn't available right now." });
+    }
+
+    const visitor = await getVisitor(credentials);
+    const claims = await getVisitorClaims(visitor, assetId);
+
+    // Already claimed: never grant or count twice. Without this the aggregate unlockCount could be
+    // inflated by replaying the request, since it no longer dedupes by profile id structurally.
+    if (hasClaimedDrop(claims, drop, profileId)) {
+      return res.json({ success: true, alreadyClaimed: true, dropId, message: "You've already unlocked this." });
+    }
+
+    const isCorrect = evaluateAnswer({ drop, password, selectedAnswers });
+    const attemptsUpdate = { [`drops.${dropId}.stats.attempts`]: (drop.stats?.attempts || 0) + 1 };
 
     if (!isCorrect) {
-      await droppedAsset.updateDataObject(dataUpdate, {
+      await droppedAsset.updateDataObject(attemptsUpdate, {
         analytics: [
-          {
-            analyticName: "false_responses",
-            profileId,
-            uniqueKey: profileId,
-            urlSlug,
-          },
+          { analyticName: "unlock_attempted", profileId, uniqueKey: profileId, urlSlug },
+          { analyticName: "false_responses", profileId, uniqueKey: profileId, urlSlug },
         ],
       });
 
-      return res.status(400).json({
-        success: false,
-        message: "Oops! That's not right. Try again!",
-      });
+      return res.status(400).json({ success: false, message: "Oops! That's not right. Try again!" });
     }
 
-    // Store open_text responses for admin review
-    if (questionType === "open_text" && password) {
-      dataUpdate[`stats.responses.${profileId}`] = {
+    const { alreadyOwned, grantedNames } = await grantDropReward({ credentials, visitor, drop });
+
+    const dataUpdate: Record<string, any> = { ...attemptsUpdate };
+
+    if (drop.questionType === "open_text" && password) {
+      dataUpdate[`drops.${dropId}.responses.${profileId}`] = {
         displayName,
         response: password.trim(),
         respondedAt: new Date().toISOString(),
@@ -72,181 +77,31 @@ export const handleUnlockAttempt = async (req: Request, res: Response) => {
     }
 
     const analytics = [
-      {
-        analyticName: "completions",
+      { analyticName: "unlock_attempted", profileId, uniqueKey: profileId, urlSlug },
+      { analyticName: "completions", profileId, uniqueKey: profileId, urlSlug },
+      { analyticName: "unlock_succeeded", profileId, uniqueKey: profileId, urlSlug },
+    ];
+
+    if (!alreadyOwned) {
+      analytics.push({
+        analyticName: `${drop.unlockType}_granted`,
         profileId,
         uniqueKey: profileId,
         urlSlug,
-      },
-    ];
-
-    const visitor = await getVisitor(credentials);
-
-    // Handle unlocking based on type
-    if (unlockType === "emote") {
-      // EMOTE UNLOCK LOGIC
-      const grantExpressionResponse = await visitor
-        .grantExpression({
-          id: itemId,
-        })
-        .catch((error: any) => {
-          console.error("Unlock with emoteId failed", error.message);
-        });
-
-      if (grantExpressionResponse?.statusCode === 409) {
-        visitor
-          .fireToast({
-            title: "Already Unlocked",
-            text: "You've already unlocked this emote! Click on your avatar to use it.",
-          })
-          .catch((error: any) =>
-            errorHandler({
-              error,
-              functionName: "handleUnlockAttempt",
-              message: "Error firing toast",
-            }),
-          );
-
-        await droppedAsset.updateDataObject(dataUpdate, { analytics });
-      } else {
-        visitor
-          .fireToast({
-            title: "Congrats! Emote Unlocked",
-            text: "You just unlocked a new emote! Click on your avatar to test it out.",
-          })
-          .catch((error: any) =>
-            errorHandler({
-              error,
-              functionName: "handleUnlockAttempt",
-              message: "Error firing toast",
-            }),
-          );
-
-        visitor.triggerParticle({ name: "Sparkle", duration: 3 }).catch((error: any) =>
-          errorHandler({
-            error,
-            functionName: "handleUnlockAttempt",
-            message: "Error triggering particle effects",
-          }),
-        );
-
-        analytics.push({
-          analyticName: "emote_granted",
-          profileId,
-          uniqueKey: profileId,
-          urlSlug,
-        });
-
-        dataUpdate[`stats.successfulUnlocks.${profileId}`] = { displayName, unlockedAt: new Date().toISOString() };
-        await droppedAsset.updateDataObject(dataUpdate, { analytics });
-      }
-    } else if (unlockType === "accessory") {
-      // ACCESSORY UNLOCK LOGIC
-      const accessoryIds: string[] = unlockData.accessoryIds || (unlockData.itemId ? [unlockData.itemId] : []);
-
-      if (!accessoryIds.length) {
-        return res.status(400).json({
-          success: false,
-          message: "No accessories configured for this unlock",
-        });
-      }
-
-      // Fetch the full InventoryItems from the Ecosystem catalog
-      const { visitorId, urlSlug, interactivePublicKey, interactiveNonce, assetId } = credentials;
-      const ecosystem = Ecosystem.create({
-        credentials: {
-          interactivePublicKey,
-          interactiveNonce,
-          assetId,
-          visitorId,
-          urlSlug,
-        },
       });
-      await ecosystem.fetchInventoryItems();
-
-      // Find all selected accessories in the catalog
-      const inventoryItems = accessoryIds
-        .map((id) => (ecosystem.inventoryItems as any[])?.find((item: any) => item.id === id))
-        .filter(Boolean);
-
-      if (!inventoryItems.length) {
-        return res.status(404).json({
-          success: false,
-          message: "Accessories not found in inventory catalog",
-        });
-      }
-
-      try {
-        // Grant accessories sequentially to avoid API lock contention
-        for (const item of inventoryItems) {
-          await visitor.grantInventoryItem(item, 1);
-        }
-
-        const count = inventoryItems.length;
-        visitor
-          .fireToast({
-            title: "Congrats! Accessories Unlocked",
-            text: `You just unlocked ${count} new accessor${count === 1 ? "y" : "ies"}!`,
-          })
-          .catch((error: any) =>
-            errorHandler({
-              error,
-              functionName: "handleUnlockAttempt",
-              message: "Error firing toast",
-            }),
-          );
-
-        visitor.triggerParticle({ name: "Sparkle", duration: 3 }).catch((error: any) =>
-          errorHandler({
-            error,
-            functionName: "handleUnlockAttempt",
-            message: "Error triggering particle effects",
-          }),
-        );
-
-        analytics.push({
-          analyticName: "accessory_granted",
-          profileId,
-          uniqueKey: profileId,
-          urlSlug,
-        });
-
-        dataUpdate[`stats.successfulUnlocks.${profileId}`] = { displayName, unlockedAt: new Date().toISOString() };
-        await droppedAsset.updateDataObject(dataUpdate, { analytics });
-      } catch (error: any) {
-        const statusCode = error?.status || error?.statusCode;
-        if (statusCode === 409) {
-          visitor
-            .fireToast({
-              title: "Already Unlocked",
-              text: "You've already unlocked these accessories!",
-            })
-            .catch((toastError: any) =>
-              errorHandler({
-                error: toastError,
-                functionName: "handleUnlockAttempt",
-                message: "Error firing toast",
-              }),
-            );
-
-          await droppedAsset.updateDataObject(dataUpdate, { analytics });
-        } else {
-          return errorHandler({
-            error,
-            functionName: "handleUnlockAttempt",
-            message: "Error granting accessory",
-            req,
-            res,
-          });
-        }
-      }
+      dataUpdate[`drops.${dropId}.stats.unlockCount`] = (drop.stats?.unlockCount || 0) + 1;
     }
 
-    await droppedAsset.fetchDataObject();
-    return res.json({
-      unlockData: droppedAsset.dataObject,
-      success: true,
-    });
+    // unlockCount is a denormalised counter, so the success write takes the lock. Concurrent unlocks
+    // could otherwise read the same value and lose an increment; the visitor claim records remain the
+    // authoritative record of who unlocked what.
+    const lockId = `${assetId}-${dropId}-${Math.round(Date.now() / 1000)}`;
+    await droppedAsset.updateDataObject(dataUpdate, { analytics, lock: { lockId, releaseLock: true } });
+
+    // Recorded even when already owned, so the challenge stops reappearing for this visitor.
+    await recordVisitorClaim(visitor, assetId, dropId);
+
+    return res.json({ success: true, dropId, alreadyOwned, grantedNames });
   } catch (error) {
     return errorHandler({
       error,

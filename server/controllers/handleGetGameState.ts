@@ -1,81 +1,103 @@
 import { Request, Response } from "express";
-import { errorHandler, getCredentials, getDroppedAsset, getVisitor, getCachedInventoryItems } from "../utils/index.js";
+import { Drop } from "../types/index.js";
+import {
+  DEFAULT_TIMEZONE,
+  buildAccessoryLookup,
+  errorHandler,
+  getActiveDrops,
+  getCachedInventoryItems,
+  getCredentials,
+  getDroppedAsset,
+  getDropState,
+  getEndedDrops,
+  getUpcomingDrops,
+  getVisitor,
+  getVisitorClaims,
+  hasClaimedDrop,
+  isAdminVisitor,
+  isDropConfigured,
+  cleanDrop,
+  todayInTimezone,
+} from "../utils/index.js";
+import type { AccessoryLookup, DropType } from "../utils/index.js";
 
+/**
+ * Every drop is reduced by `cleanDrop` before it leaves
+ * here — the raw drops map holds answers and must never be returned to a non-admin.
+ *
+ * The admin home is the same payload; the drops list is a separate admin-only route.
+ */
 export const handleGetGameState = async (req: Request, res: Response) => {
   try {
     const credentials = getCredentials(req.query);
-    const { profileId, urlSlug } = credentials;
+    const { assetId, profileId, urlSlug } = credentials;
+    const forceRefresh = req.query.forceRefreshInventory === "true";
 
     const droppedAsset = await getDroppedAsset(credentials);
     const dataObject = droppedAsset.dataObject;
 
-    // Backwards compatibility: detect unlock type
-    const unlockType = dataObject.unlockType || (dataObject.emoteId ? "emote" : null);
-    const itemId = dataObject.itemId || dataObject.emoteId;
-    const itemName = dataObject.itemName || dataObject.emoteName;
-    const itemDescription = dataObject.itemDescription || dataObject.emoteDescription;
-    const itemPreviewUrl = dataObject.itemPreviewUrl || dataObject.emotePreviewUrl;
-
-    const isItemUnlocked = dataObject?.stats?.successfulUnlocks[profileId];
+    const timezone = dataObject.timezone || DEFAULT_TIMEZONE;
+    const today = todayInTimezone(timezone);
+    const drops = dataObject.drops || {};
 
     const visitor = await getVisitor(credentials);
+    const isAdmin = isAdminVisitor(visitor);
+    const claims = await getVisitorClaims(visitor, assetId);
 
-    // Remove answer data for non-admin users
-    const isAdmin = visitor.isAdmin;
-    if (!isAdmin) {
-      delete dataObject.password;
-      delete dataObject.correctAnswers;
-    }
-
-    visitor.updateDataObject(
-      {},
-      {
-        analytics: [{ analyticName: "starts", profileId, urlSlug, uniqueKey: profileId }],
-      },
+    // Only pay for the ecosystem lookup when an accessory drop actually needs thumbnails.
+    let accessoryLookup: AccessoryLookup | undefined;
+    const needsAccessories = Object.values(drops).some(
+      (drop) => drop.unlockType === "accessory" && drop.accessoryIds?.length,
     );
-
-    // Resolve accessory details from inventory cache
-    let ecosystemAccessories: { id: string; name: string; previewUrl: string; category?: string }[] = [];
-    if (unlockType === "accessory" && dataObject.accessoryIds?.length) {
+    if (needsAccessories) {
       try {
-        const allItems = await getCachedInventoryItems({ credentials });
-        ecosystemAccessories = allItems
-          .filter((i: any) => i.type === "ACCESSORY")
-          .map((i: any) => ({
-            id: i.id,
-            name: i.metadata?.displayName || i.name || "Accessory",
-            previewUrl: i.image_path || "/default-accessory-icon.svg",
-            category: i.metadata?.category || "",
-          }));
-      } catch {
-        // Fall back to empty array if cache fetch fails
+        accessoryLookup = buildAccessoryLookup(await getCachedInventoryItems({ credentials, forceRefresh }));
+      } catch (error) {
+        // A catalog outage shouldn't blank the whole app — cards fall back to the default icon.
+        console.error("Unable to resolve accessory previews", error);
       }
     }
 
-    // Determine default icon
-    const defaultIcon = unlockType === "accessory" ? `/default-accessory-icon.svg` : `/default-emote-icon.svg`;
+    // Half-configured drops are never shown to non-admin.
+    const configured = (drop: Drop) => isDropConfigured(drop);
+    const project = (drop: Drop, claimed?: boolean) =>
+      cleanDrop({ drop, state: getDropState(drop, today), claimed, accessoryLookup });
 
-    return res.json({
-      unlockData: {
-        ...dataObject,
-        ecosystemAccessories,
-        // New fields (always present)
-        unlockType,
-        itemId,
-        itemName,
-        itemDescription,
-        itemPreviewUrl: itemPreviewUrl || defaultIcon,
-        isItemUnlocked,
-        // Legacy fields for backwards compatibility
-        emoteId: itemId,
-        emoteName: itemName,
-        emoteDescription: itemDescription,
-        emotePreviewUrl: itemPreviewUrl || defaultIcon,
-        isEmoteUnlocked: isItemUnlocked,
-      },
-      isAdmin,
-      success: true,
-    });
+    const upcoming = getUpcomingDrops(drops, today)
+      .filter(configured)
+      .map((drop) => project(drop))
+      .filter(Boolean) as DropType[];
+
+    const recentDrops = getEndedDrops(drops, today)
+      .filter(configured)
+      .map((drop) => project(drop, hasClaimedDrop(claims, drop, profileId)))
+      .filter(Boolean) as DropType[];
+
+    // Claimed drops stay in the feed, flagged, so the client can render them as success cards. Only
+    // drops whose window has closed leave the feed — those surface in the Recent Drops strip instead.
+    const active = getActiveDrops(drops, today)
+      .filter(configured)
+      .map((drop) => project(drop, hasClaimedDrop(claims, drop, profileId)))
+      .filter(Boolean) as DropType[];
+
+    const analytics = [
+      { analyticName: "starts", profileId, urlSlug, uniqueKey: profileId },
+      { analyticName: "unlock_app_opened", profileId, urlSlug, uniqueKey: profileId },
+    ];
+    if (upcoming.length)
+      analytics.push({ analyticName: "next_unlock_viewed", profileId, urlSlug, uniqueKey: profileId });
+    if (recentDrops.length)
+      analytics.push({ analyticName: "recent_drops_viewed", profileId, urlSlug, uniqueKey: profileId });
+
+    if (typeof visitor?.updateDataObject === "function") {
+      visitor
+        .updateDataObject({}, { analytics })
+        .catch((error: any) =>
+          errorHandler({ error, functionName: "handleGetGameState", message: "Error firing analytics" }),
+        );
+    }
+
+    return res.json({ upcoming, recentDrops, active, isAdmin, timezone, today, success: true });
   } catch (error) {
     return errorHandler({
       error,
