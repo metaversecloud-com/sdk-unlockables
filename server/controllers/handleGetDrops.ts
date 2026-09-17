@@ -8,6 +8,7 @@ import {
   getDroppedAsset,
   getDropState,
   isDropConfigured,
+  pruneStaleDrops,
   requireAdmin,
   resolveDropItem,
   sortDropsForAdmin,
@@ -31,7 +32,9 @@ export const handleGetDrops = async (req: Request, res: Response) => {
 
     const timezone = dataObject.timezone || DEFAULT_TIMEZONE;
     const today = todayInTimezone(timezone);
-    const drops = dataObject.drops || {};
+    // Trim drops whose window closed more than 30 days ago. Returns a clean
+    // (no-null, no-stale) map that the rest of this handler operates on.
+    const { drops } = await pruneStaleDrops({ droppedAsset, today });
 
     let accessoryLookup: AccessoryLookup | undefined;
     if (Object.values(drops).some((drop) => drop.unlockType === "accessory" && drop.accessoryIds?.length)) {

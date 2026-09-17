@@ -57,12 +57,14 @@ export const handleGetUnlockables = async (req: Request, res: Response) => {
       const packId = pack.metadata?.packId;
       const packAccessories = accessories
         .filter((accessory) => accessory.metadata?.packId === packId)
-        .map((accessory) => ({
-          id: accessory.id,
-          name: accessory.metadata?.displayName || accessory.name,
-          category: accessory.metadata?.category || "",
-          previewUrl: accessory.image_path || DEFAULT_ICONS.accessory,
-        }));
+        .map((accessory) => {
+          return {
+            id: accessory.id,
+            name: accessory.metadata?.displayName || accessory.name,
+            category: accessory.metadata?.category || "",
+            previewUrl: accessory.image_path || DEFAULT_ICONS.accessory,
+          };
+        });
 
       return {
         id: pack.id,

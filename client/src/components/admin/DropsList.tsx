@@ -99,7 +99,7 @@ export const DropsList = ({
                           />
                         </span>
                         <span className="font-semibold text-secondary truncate">
-                          {drop.resolvedItemName || "Untitled drop"}
+                          {drop.challengeName || drop.resolvedItemName || "Untitled drop"}
                         </span>
                       </span>
 

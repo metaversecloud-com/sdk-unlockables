@@ -53,6 +53,10 @@ export const validateDropInput = (drop: Partial<Drop>): string | null => {
     return "Please choose a question type.";
   }
 
+  if (!drop.challengeName?.trim()) {
+    return "Please enter a challenge name.";
+  }
+
   if (!drop.itemDescription?.trim()) {
     return "Please enter a question or description.";
   }

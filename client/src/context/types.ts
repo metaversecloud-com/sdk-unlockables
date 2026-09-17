@@ -42,6 +42,8 @@ export interface DropType {
   state: DropState;
   unlockType: UnlockType;
 
+  challengeName?: string;
+
   itemName?: string;
   itemPreviewUrl?: string;
   accessories?: AccessoryPreview[];

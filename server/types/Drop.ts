@@ -25,6 +25,14 @@ export interface Drop {
   id: string;
   unlockType: UnlockType;
 
+  /**
+   * Admin-authored title for the challenge (e.g. "Warp Drive Trivia"). Required
+   * from the editor; defaults to the selected item's name on save if the admin
+   * hasn't entered a custom value. Optional in the type only because legacy
+   * drops predating this field may still be in storage until they're re-saved.
+   */
+  challengeName?: string;
+
   // emote
   itemId?: string;
   itemName?: string;

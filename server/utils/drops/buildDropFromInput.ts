@@ -4,6 +4,8 @@ import { createDrop } from "./migrateToV2.js";
 export interface DropInput {
   unlockType?: UnlockType;
 
+  challengeName?: string;
+
   itemId?: string;
   itemName?: string;
   itemPreviewUrl?: string;
@@ -74,6 +76,15 @@ export const buildDropFromInput = ({ input, existing }: { input: DropInput; exis
 
   const base = existing || createDrop();
 
+  // Default challengeName to the selected item's display name when the admin
+  // didn't type one in — mirrors the client's placeholder behaviour and keeps
+  // the field non-empty when a payload arrives without it (defensive belt +
+  // suspenders with dropValidation's `required` check).
+  const trimmedChallengeName = input.challengeName?.toString().trim() ?? "";
+  const fallbackChallengeName =
+    unlockType === "badge" ? item.badgeName || "" : item.itemName || "";
+  const challengeName = trimmedChallengeName || fallbackChallengeName;
+
   return {
     ...base,
     id: base.id,
@@ -92,6 +103,7 @@ export const buildDropFromInput = ({ input, existing }: { input: DropInput; exis
     correctAnswers: undefined,
     ...item,
     ...answer,
+    challengeName,
     itemDescription: input.itemDescription?.toString() ?? "",
     questionType,
     startDate: alwaysAvailable ? null : cleanDate(input.startDate),
