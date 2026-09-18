@@ -4,3 +4,4 @@ export * from "./dropValidation.js";
 export * from "./evaluateAnswer.js";
 export * from "./migrateToV2.js";
 export * from "./cleanDrop.js";
+export * from "./pruneStaleDrops.js";

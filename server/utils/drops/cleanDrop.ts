@@ -15,6 +15,9 @@ export interface DropType {
   state: DropState;
   unlockType: UnlockType;
 
+  /** Admin-authored challenge title; defaults to the item name when the admin didn't customize it. Absent for mystery drops. */
+  challengeName?: string;
+
   /** Absent for mystery drops. */
   itemName?: string;
   itemPreviewUrl?: string;
@@ -104,23 +107,28 @@ export const cleanDrop = ({
   const { itemName, itemPreviewUrl, accessories } = resolveDropItem(drop, accessoryLookup);
 
   const base = { id: drop.id, state, unlockType: drop.unlockType };
+  // Fall back to the resolved item name so pre-challengeName drops still show
+  // something sensible (and matches the admin editor's default behaviour).
+  const challengeName = drop.challengeName?.trim() || itemName;
 
   if (state === "upcoming") {
     // An untagged upcoming drop must not appear anywhere until it goes live.
     if (!drop.showInUpcoming) return null;
 
     if (drop.upcomingDisplay === "mystery") {
-      // Type and dates only — no name, no preview, no question.
+      // Type and dates only — no name, no preview, no question. Withhold
+      // challengeName too since it often mirrors the item name and would
+      // leak the mystery reward.
       return { ...base, mystery: true, startDate: drop.startDate, endDate: drop.endDate };
     }
 
-    return { ...base, itemName, itemPreviewUrl, startDate: drop.startDate, endDate: drop.endDate };
+    return { ...base, challengeName, itemName, itemPreviewUrl, startDate: drop.startDate, endDate: drop.endDate };
   }
 
   if (state === "ended") {
     // The name is needed for the greyed thumbnail's tooltip, including for drops that were a mystery
     // while upcoming — once it's over, there's nothing left to withhold.
-    return { ...base, itemName, itemPreviewUrl, endDate: drop.endDate, claimed: !!claimed };
+    return { ...base, challengeName, itemName, itemPreviewUrl, endDate: drop.endDate, claimed: !!claimed };
   }
 
   // live | always — the full challenge, minus the answer.
@@ -130,6 +138,7 @@ export const cleanDrop = ({
   // were removed here it would leave every band and vanish from the app entirely.
   return {
     ...base,
+    challengeName,
     itemName,
     itemPreviewUrl,
     accessories: drop.unlockType === "accessory" ? accessories : undefined,

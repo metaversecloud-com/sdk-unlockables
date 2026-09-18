@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { GlobalDispatchContext } from "@/context/GlobalContext";
 import {
@@ -13,7 +13,7 @@ import {
   UpcomingDisplay,
 } from "@/context/types";
 import { backendAPI, setErrorMessage } from "@/utils";
-import { AnswerBuilder, ChallengeCard, ConfirmationModal, EngagementPanel } from "@/components";
+import { AnswerBuilder, ChallengeCard, ConfirmationModal, EngagementPanel, ItemThumb } from "@/components";
 import { AccessoryPicker, BadgePicker, EmotePicker } from "./ItemPickers";
 
 const UNLOCK_TYPE_OPTIONS: { value: UnlockType; label: string }[] = [
@@ -45,9 +45,23 @@ export const DropEditor = ({ dropId, onBack, onDone }: { dropId?: string; onBack
   const [itemPreviewUrl, setItemPreviewUrl] = useState("");
   const [packId, setPackId] = useState("");
   const [accessoryIds, setAccessoryIds] = useState<string[]>([]);
+  // Accessory drops let the admin pick a single icon for the challenge card
+  // from the pack image or any of the currently-selected accessories. The
+  // value flows through to `itemPreviewUrl` at save time — no separate field
+  // on Drop.
+  const [challengePreviewUrl, setChallengePreviewUrl] = useState("");
   const [badgeId, setBadgeId] = useState("");
   const [badgeName, setBadgeName] = useState("");
   const [badgeIcon, setBadgeIcon] = useState("");
+  // Admin-authored title. Stored empty while auto-tracking the item name;
+  // once the admin types a custom value it wins. `effectiveChallengeName`
+  // below is the value the user actually sees — it falls back to the item
+  // name whenever `customChallengeName` is blank.
+  const [customChallengeName, setCustomChallengeName] = useState("");
+  // Custom-dropdown open state for the Challenge Preview Icon picker. Native
+  // <select> options can't carry images so we render our own listbox.
+  const [previewIconOpen, setPreviewIconOpen] = useState(false);
+  const previewIconRef = useRef<HTMLDivElement>(null);
   const [itemDescription, setItemDescription] = useState("");
   const [questionType, setQuestionType] = useState<QuestionType>("text");
   const [password, setPassword] = useState("");
@@ -83,12 +97,22 @@ export const DropEditor = ({ dropId, onBack, onDone }: { dropId?: string; onBack
         setItemId(drop.itemId || "");
         setItemName(drop.itemName || "");
         setItemPreviewUrl(drop.itemPreviewUrl || "");
+        // For accessory drops the stored itemPreviewUrl is whichever icon
+        // (pack or specific accessory) the admin chose last. Rehydrate the
+        // dropdown state from it; the sync effect below will validate it
+        // against the current pack + selected accessories on next render.
+        setChallengePreviewUrl(drop.itemPreviewUrl || "");
         setPackId(drop.packId || "");
         setAccessoryIds(drop.accessoryIds || []);
         setBadgeId(drop.badgeId || "");
         setBadgeName(drop.badgeName || "");
         setBadgeIcon(drop.badgeIcon || "");
         setItemDescription(drop.itemDescription || "");
+        // Only treat as "custom" when the stored challengeName differs from
+        // the item name; identical means the admin let it default and we
+        // should keep auto-tracking future item changes.
+        const autoName = drop.unlockType === "badge" ? drop.badgeName || "" : drop.itemName || "";
+        setCustomChallengeName(drop.challengeName && drop.challengeName !== autoName ? drop.challengeName : "");
         setQuestionType(drop.questionType);
         setPassword(drop.password || "");
         setOptions(drop.options?.length ? drop.options : ["", ""]);
@@ -113,12 +137,88 @@ export const DropEditor = ({ dropId, onBack, onDone }: { dropId?: string; onBack
 
   const selectedPack = packs.find((pack) => pack.id === packId);
 
+  // The item name that would default the challenge name if the admin hasn't
+  // typed one in. Accessory packs use the pack's name; emote/badge use their
+  // own name states set by the pickers.
+  const autoChallengeName =
+    unlockType === "accessory" ? selectedPack?.name || "" : unlockType === "badge" ? badgeName : itemName;
+  const effectiveChallengeName = customChallengeName.trim() || autoChallengeName;
+
+  // Options for the "Challenge Preview Icon" dropdown: the pack image plus
+  // any currently-selected accessory. Rebuilt whenever the pack changes or
+  // the selected accessories change. Each option carries its own thumb URL
+  // and (for accessories) a category label — packs have no category.
+  type PreviewIconOption = { url: string; label: string; previewUrl: string; category?: string };
+  const previewIconOptions = useMemo<PreviewIconOption[]>(() => {
+    if (unlockType !== "accessory" || !selectedPack) return [];
+    const options: PreviewIconOption[] = [];
+    if (selectedPack.previewUrl) {
+      options.push({
+        url: selectedPack.previewUrl,
+        label: `${selectedPack.name} (pack)`,
+        previewUrl: selectedPack.previewUrl,
+      });
+    }
+    for (const accessory of selectedPack.accessories || []) {
+      if (accessoryIds.includes(accessory.id) && accessory.previewUrl) {
+        options.push({
+          url: accessory.previewUrl,
+          label: accessory.name,
+          previewUrl: accessory.previewUrl,
+          category: accessory.category,
+        });
+      }
+    }
+    return options;
+  }, [unlockType, selectedPack, accessoryIds]);
+  const selectedPreviewIcon = previewIconOptions.find((option) => option.url === challengePreviewUrl);
+
+  // Close the preview-icon dropdown on outside click or Escape.
+  useEffect(() => {
+    if (!previewIconOpen) return;
+    const handlePointer = (event: MouseEvent) => {
+      if (previewIconRef.current && !previewIconRef.current.contains(event.target as Node)) {
+        setPreviewIconOpen(false);
+      }
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewIconOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [previewIconOpen]);
+
+  // Keep the admin's icon choice valid. If the current selection isn't in
+  // the options list (pack switched, or the chosen accessory was deselected)
+  // fall back to the first option — the pack image, or the only remaining
+  // accessory, or empty when no options exist.
+  useEffect(() => {
+    if (unlockType !== "accessory") return;
+    if (previewIconOptions.length === 0) {
+      if (challengePreviewUrl) setChallengePreviewUrl("");
+      return;
+    }
+    if (!previewIconOptions.some((option) => option.url === challengePreviewUrl)) {
+      setChallengePreviewUrl(previewIconOptions[0].url);
+    }
+  }, [unlockType, previewIconOptions, challengePreviewUrl]);
+
   const previewDrop: DropType = useMemo(() => {
     const accessories = (selectedPack?.accessories || []).filter((accessory) => accessoryIds.includes(accessory.id));
 
     const resolved = {
       emote: { name: itemName, preview: itemPreviewUrl },
-      accessory: { name: selectedPack?.name || itemName, preview: selectedPack?.previewUrl || itemPreviewUrl },
+      accessory: {
+        name: selectedPack?.name || itemName,
+        // Accessory challenge card shows the admin-chosen preview icon (pack
+        // image or one of the selected accessories), not the pack image
+        // unconditionally.
+        preview: challengePreviewUrl || selectedPack?.previewUrl || itemPreviewUrl,
+      },
       badge: { name: badgeName, preview: badgeIcon },
     }[unlockType];
 
@@ -126,6 +226,7 @@ export const DropEditor = ({ dropId, onBack, onDone }: { dropId?: string; onBack
       id: dropId || "preview",
       state: alwaysAvailable ? "always" : "live",
       unlockType,
+      challengeName: effectiveChallengeName,
       itemName: resolved.name,
       itemPreviewUrl: resolved.preview,
       accessories: unlockType === "accessory" ? accessories : undefined,
@@ -140,7 +241,9 @@ export const DropEditor = ({ dropId, onBack, onDone }: { dropId?: string; onBack
     alwaysAvailable,
     badgeIcon,
     badgeName,
+    challengePreviewUrl,
     dropId,
+    effectiveChallengeName,
     endDate,
     existingDrop,
     itemDescription,
@@ -158,10 +261,17 @@ export const DropEditor = ({ dropId, onBack, onDone }: { dropId?: string; onBack
 
     const body = {
       unlockType,
+      // Blank customChallengeName means "default to the item name" — send the
+      // resolved value so the server persists a non-empty title.
+      challengeName: effectiveChallengeName,
       itemId: unlockType === "emote" ? itemId : undefined,
       itemName: unlockType === "accessory" ? selectedPack?.name : unlockType === "emote" ? itemName : undefined,
       itemPreviewUrl:
-        unlockType === "accessory" ? selectedPack?.previewUrl : unlockType === "emote" ? itemPreviewUrl : undefined,
+        unlockType === "accessory"
+          ? challengePreviewUrl || selectedPack?.previewUrl
+          : unlockType === "emote"
+            ? itemPreviewUrl
+            : undefined,
       packId: unlockType === "accessory" ? packId : undefined,
       accessoryIds: unlockType === "accessory" ? accessoryIds : undefined,
       badgeId: unlockType === "badge" ? badgeId : undefined,
@@ -355,6 +465,82 @@ export const DropEditor = ({ dropId, onBack, onDone }: { dropId?: string; onBack
           />
         )}
 
+        {/* Challenge preview icon (accessory only) */}
+        {unlockType === "accessory" && previewIconOptions.length > 0 && (
+          <div className="admin-section">
+            <h4 className="text-sm font-semibold text-secondary mb-2">Challenge Preview Icon</h4>
+            <div ref={previewIconRef} className="relative">
+              <button
+                type="button"
+                className="input-treasure flex items-center gap-3 w-full text-left"
+                aria-haspopup="listbox"
+                aria-expanded={previewIconOpen}
+                onClick={() => setPreviewIconOpen((open) => !open)}
+              >
+                {selectedPreviewIcon ? (
+                  <>
+                    <img
+                      src={selectedPreviewIcon.previewUrl}
+                      alt=""
+                      className="w-7 h-7 rounded object-contain flex-shrink-0"
+                    />
+                    <span className="flex-1 truncate">{selectedPreviewIcon.label}</span>
+                    {selectedPreviewIcon.category && (
+                      <span className="text-xs text-ink-soft flex-shrink-0">({selectedPreviewIcon.category})</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-ink-soft">Select an icon</span>
+                )}
+                <span aria-hidden="true" className="ml-auto text-ink-soft">▾</span>
+              </button>
+
+              {previewIconOpen && (
+                <ul
+                  role="listbox"
+                  className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border border-warm-border bg-surface shadow-lg"
+                >
+                  {previewIconOptions.map((option) => {
+                    const isSelected = option.url === challengePreviewUrl;
+                    return (
+                      <li key={option.url}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          className={`flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-warm-border/40 ${
+                            isSelected ? "bg-warm-border/30" : ""
+                          }`}
+                          onClick={() => {
+                            setChallengePreviewUrl(option.url);
+                            setPreviewIconOpen(false);
+                          }}
+                        >
+                          <img
+                            src={option.previewUrl}
+                            alt=""
+                            className="w-7 h-7 rounded object-contain flex-shrink-0"
+                          />
+                          <span className="flex-1 truncate">{option.label}</span>
+                          {option.category && (
+                            <span className="text-xs text-ink-soft flex-shrink-0">({option.category})</span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            {challengePreviewUrl && (
+              <div className="flex justify-center mt-3">
+                <ItemThumb name="Challenge preview" previewUrl={challengePreviewUrl} unlockType="accessory" size="sm" />
+              </div>
+            )}
+            <p className="text-xs text-ink-soft mt-2">Shown as the icon on the challenge card.</p>
+          </div>
+        )}
+
         {unlockType === "badge" && (
           <BadgePicker
             badges={badges}
@@ -366,6 +552,24 @@ export const DropEditor = ({ dropId, onBack, onDone }: { dropId?: string; onBack
             }}
           />
         )}
+
+        {/* Challenge name */}
+        <div className="admin-section">
+          <h4 className="text-sm font-semibold text-secondary mb-2">
+            Challenge Name <span className="text-danger">*</span>
+          </h4>
+          <input
+            type="text"
+            className="input-treasure"
+            value={customChallengeName}
+            onChange={(event) => setCustomChallengeName(event.target.value)}
+            placeholder={autoChallengeName || "Enter a name for this challenge"}
+            required
+          />
+          {!customChallengeName.trim() && autoChallengeName && (
+            <p className="text-xs text-ink-soft mt-1">Defaults to “{autoChallengeName}”.</p>
+          )}
+        </div>
 
         {/* Question */}
         <div className="admin-section">
