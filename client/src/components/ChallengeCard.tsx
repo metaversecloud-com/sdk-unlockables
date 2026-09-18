@@ -67,6 +67,8 @@ export const ChallengeCard = ({
 
   const questionType = drop.questionType || "text";
   const options = drop.options || [];
+  const isAccessory = drop.unlockType === "accessory";
+  const accessories = drop.accessories || [];
   const typeLabel = TYPE_LABELS[drop.unlockType] || "Reward";
   const isFreeText = questionType === "text" || questionType === "open_text";
 
@@ -144,16 +146,27 @@ export const ChallengeCard = ({
             drop.endDate && <span className="drop-chip drop-chip-live">Ends {formatDropDate(drop.endDate)}</span>
           )}
         </div>
-        <div className="flex flex-col items-center">
-          <ItemThumb
-            name={drop.itemName}
-            previewUrl={drop.itemPreviewUrl}
-            unlockType={drop.unlockType}
-            size="lg"
-            frameClassName="animate-gentle-pulse"
-          />
-          {drop.itemName && <p className="text-xs pt-1 text-ink-soft">{drop.challengeName || drop.itemName}</p>}
-        </div>
+        {isAccessory && accessories.length > 0 ? (
+          <div className="flex flex-wrap gap-3 justify-center">
+            {accessories.map((accessory) => (
+              <div key={accessory.id} className="text-center">
+                <ItemThumb name={accessory.name} previewUrl={accessory.previewUrl} unlockType="accessory" />
+                <p className="text-xs mt-2 font-medium text-ink-soft">{accessory.name}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center">
+            <ItemThumb
+              name={drop.itemName}
+              previewUrl={drop.itemPreviewUrl}
+              unlockType={drop.unlockType}
+              size="lg"
+              frameClassName="animate-gentle-pulse"
+            />
+            {drop.itemName && <p className="text-xs pt-1 text-ink-soft">{drop.itemName}</p>}
+          </div>
+        )}
 
         <p className="text-center text-ink font-medium leading-relaxed" style={{ whiteSpace: "pre-line" }}>
           {drop.itemDescription ||
