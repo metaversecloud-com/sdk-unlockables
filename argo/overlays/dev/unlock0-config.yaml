@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: emunlock0-config
+  name: unlock0-config
   labels:
-    app.kubernetes.io/name: emunlock0
+    app.kubernetes.io/name: unlock0
 data:
   INSTANCE_DOMAIN: 'api.topia.io'
   INSTANCE_PROTOCOL: 'https'
