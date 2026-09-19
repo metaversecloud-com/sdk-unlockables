@@ -4,27 +4,30 @@ kind: Kustomization
 # workload resources carry no namespace and Argo injects the Application's
 # destination namespace (sdk-apps-dev).
 resources:
-  - ../../services/emunlock0
-  - emunlock0-config.yaml
-  - emunlock0-sealedsecret.yaml
-  - emunlock0-httpscaledobject.yaml
-  - emunlock0-interceptor-ingress.yaml
+  - ../../services/unlock0
+  - unlock0-config.yaml
+  - unlock0-sealedsecret.yaml
+  - unlock0-httpscaledobject.yaml
 patches:
   # Drop the direct ALB Ingress: in dev the app is fronted through the KEDA
   # interceptor so a scaled-to-zero Deployment is woken by the first request.
   - target:
       kind: Ingress
-      name: emunlock0
+      name: unlock0
     patch: |
       $patch: delete
       apiVersion: networking.k8s.io/v1
       kind: Ingress
       metadata:
-        name: emunlock0
+        name: unlock0
 # Per-service image (defaults to the shared dev ECR sdk-example:<repo>; an
 # independent deployment may pin a different tag/image).
 images:
+  - name: unlock0
+    newName: 368076259134.dkr.ecr.us-east-1.amazonaws.com/sdk-example
+    digest: sha256:e9b6fabac9db164085ff614c4edee04678fb795eeb465cf1c4a07f91407137eb
+    newTag: sdk-unlockables
   - name: emunlock0
     newName: 368076259134.dkr.ecr.us-east-1.amazonaws.com/sdk-example
-    digest: sha256:2d0faae69c398333dcf53df9de9ccd1249c47bf73f4d1ae9976819450588e91f
-    newTag: sdk-emote-unlock
+    newTag: sdk-unlockables
+    digest: sha256:e9b6fabac9db164085ff614c4edee04678fb795eeb465cf1c4a07f91407137eb

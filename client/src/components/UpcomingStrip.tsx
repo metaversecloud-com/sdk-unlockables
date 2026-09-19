@@ -27,7 +27,7 @@ export const UpcomingStrip = ({ drops }: { drops: DropType[] }) => {
                   "❓"
                 ) : (
                   <ItemThumb
-                    name={drop.itemName}
+                    name={drop.challengeName || drop.itemName}
                     previewUrl={drop.itemPreviewUrl}
                     unlockType={drop.unlockType}
                     size="xs"
@@ -35,7 +35,7 @@ export const UpcomingStrip = ({ drops }: { drops: DropType[] }) => {
                 )}
               </span>
               <span className="font-medium text-ink">
-                {drop.mystery ? `Mystery ${typeLabel}` : drop.itemName || typeLabel}
+                {drop.mystery ? `Mystery ${typeLabel}` : drop.challengeName || drop.itemName || typeLabel}
               </span>
               {range && <span>— {range}</span>}
             </li>

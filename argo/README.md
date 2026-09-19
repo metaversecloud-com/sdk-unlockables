@@ -11,16 +11,16 @@ by a Terraform-templated CI workflow.
   points the generated Application at `dev` for the manifests.
 - `dev` = the full argo tree (services/ + overlays/ + envs/ WITHOUT `targetRevision`).
 
-**Secrets:** no plaintext committed. `emunlock0-sealedsecret.yaml` holds only ciphertext
+**Secrets:** no plaintext committed. `unlock0-sealedsecret.yaml` holds only ciphertext
 (sealed strict-scope for namespace sdk-apps-dev); the controller unseals it into
-`Secret emunlock0-secrets`, consumed via `envFrom`. Non-secret env (incl. public
-`INTERACTIVE_KEY`) lives in `emunlock0-config`.
+`Secret unlock0-secrets`, consumed via `envFrom`. Non-secret env (incl. public
+`INTERACTIVE_KEY`) lives in `unlock0-config`.
 
 ## Environment
 
 | Env | Service | Namespace | Host | Health |
 | --- | ------- | --------- | ---- | ------ |
-| `dev` | `emunlock0` | `sdk-apps-dev` | emunlock0-dev-topia.topia-rtsdk.com | `/api/system/health` |
+| `dev` | `unlock0` | `sdk-apps-dev` | unlock0-dev-topia.topia-rtsdk.com | `/api/system/health` |
 
 ## Render locally
 
