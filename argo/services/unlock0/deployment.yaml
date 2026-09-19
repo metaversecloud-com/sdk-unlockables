@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: emunlock0
+  name: unlock0
   labels:
-    app.kubernetes.io/name: emunlock0
+    app.kubernetes.io/name: unlock0
 spec:
   # Replicas are managed by the per-env KEDA HTTPScaledObject (dev: scale-to-zero
   # 0<->1 via the KEDA HTTP add-on interceptor).
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: emunlock0
+      app.kubernetes.io/name: unlock0
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: emunlock0
+        app.kubernetes.io/name: unlock0
     spec:
       # Suppress Docker-link-style env injection for every Service in the
       # namespace. This app reads config only from its own ConfigMap/Secret.
@@ -24,8 +24,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: emunlock0
-          image: emunlock0 # placeholder; overlay `images:` maps it to the real ref
+        - name: unlock0
+          image: unlock0 # placeholder; overlay `images:` maps it to the real ref
           imagePullPolicy: Always
           ports:
             - name: http
@@ -34,9 +34,9 @@ spec:
             # Per-service config + secret (own INTERACTIVE_KEY/SECRET). Seeded
             # out-of-band by the Terraform-templated CI job (NOT Argo-managed).
             - configMapRef:
-                name: emunlock0-config
+                name: unlock0-config
             - secretRef:
-                name: emunlock0-secrets
+                name: unlock0-secrets
           livenessProbe:
             httpGet:
               path: /api/system/health

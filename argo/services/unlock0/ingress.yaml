@@ -1,9 +1,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: emunlock0
+  name: unlock0
   labels:
-    app.kubernetes.io/name: emunlock0
+    app.kubernetes.io/name: unlock0
   annotations:
     # All SDK apps in the cluster share ONE ALB via this group (flat ALB cost).
     alb.ingress.kubernetes.io/group.name: topia-dev
@@ -15,14 +15,14 @@ metadata:
 spec:
   ingressClassName: alb
   rules:
-    - host: emunlock0-dev-topia.topia-rtsdk.com
+    - host: unlock0-dev-topia.topia-rtsdk.com
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: emunlock0
+                name: unlock0
                 port:
                   number: 80
   # Embedded in a topia.io iframe - do NOT add restrictive frame-ancestors here.
