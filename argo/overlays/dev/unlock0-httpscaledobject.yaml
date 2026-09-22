@@ -9,6 +9,8 @@ spec:
   # >1 host here = scenario "same deployment, multiple URLs" (shared keys).
   hosts:
     - unlock0-dev-topia.topia-rtsdk.com
+    # Legacy alias kept live, as prod does (emunlock0 + unlock0 -> one backend).
+    - emunlock0-dev-topia.topia-rtsdk.com
   scaleTargetRef:
     name: unlock0
     kind: Deployment

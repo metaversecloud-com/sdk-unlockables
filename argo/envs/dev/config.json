@@ -10,7 +10,8 @@
       "name": "unlock0",
       "image": "368076259134.dkr.ecr.us-east-1.amazonaws.com/sdk-example:sdk-unlockables",
       "hosts": [
-        "unlock0-dev-topia.topia-rtsdk.com"
+        "unlock0-dev-topia.topia-rtsdk.com",
+        "emunlock0-dev-topia.topia-rtsdk.com"
       ],
       "health": "/api/system/health"
     }
