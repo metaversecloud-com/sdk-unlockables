@@ -20,7 +20,7 @@ by a Terraform-templated CI workflow.
 
 | Env | Service | Namespace | Host | Health |
 | --- | ------- | --------- | ---- | ------ |
-| `dev` | `unlock0` | `sdk-apps-dev` | unlock0-dev-topia.topia-rtsdk.com | `/api/system/health` |
+| `dev` | `unlock0` | `sdk-apps-dev` | unlock0-dev-topia.topia-rtsdk.com, emunlock0-dev-topia.topia-rtsdk.com (legacy alias) | `/api/system/health` |
 
 ## Render locally
 
