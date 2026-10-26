@@ -44,7 +44,21 @@ const cleanDate = (value?: string | null): string | null => (value && value.trim
  * Engagement data and `createdAt` are preserved from the existing drop: editing a live drop must
  * never revoke or reset what students have already earned.
  */
-export const buildDropFromInput = ({ input, existing }: { input: DropInput; existing?: Drop }): Drop => {
+export const buildDropFromInput = ({
+  input,
+  existing,
+  inventoryItems,
+}: {
+  input: DropInput;
+  existing?: Drop;
+  /**
+   * Fresh ecosystem inventory. When present, accessory names are resolved
+   * server-side from this list and stored alongside `accessoryIds` so
+   * cross-ecosystem transfers can resolve by exact name later. Pass empty
+   * (or omit) and names fall back to any existing drop's `accessoryNames`.
+   */
+  inventoryItems?: any[];
+}): Drop => {
   const unlockType: UnlockType = input.unlockType || existing?.unlockType || "emote";
   const questionType: QuestionType = input.questionType || "text";
 
@@ -56,6 +70,14 @@ export const buildDropFromInput = ({ input, existing }: { input: DropInput; exis
   } else if (unlockType === "accessory") {
     item.packId = input.packId;
     item.accessoryIds = input.accessoryIds || [];
+    // Resolve display names from the live inventory (so they match the
+    // ecosystem's canonical `item.name`). Fall back to the existing
+    // drop's stored names if the inventory list wasn't supplied — never
+    // overwrite a known name with an empty string.
+    item.accessoryNames = (input.accessoryIds || []).map((id, index) => {
+      const match = inventoryItems?.find((i) => i?.id === id && i?.type === "ACCESSORY");
+      return match?.name ?? existing?.accessoryNames?.[index] ?? "";
+    });
     item.itemName = input.itemName;
     item.itemPreviewUrl = input.itemPreviewUrl;
   } else {
@@ -95,6 +117,7 @@ export const buildDropFromInput = ({ input, existing }: { input: DropInput; exis
     itemPreviewUrl: undefined,
     packId: undefined,
     accessoryIds: undefined,
+    accessoryNames: undefined,
     badgeId: undefined,
     badgeName: undefined,
     badgeIcon: undefined,

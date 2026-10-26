@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import {
   buildDropFromInput,
   errorHandler,
+  getCachedInventoryItems,
   getCredentials,
   getDroppedAsset,
   requireAdmin,
@@ -44,7 +45,12 @@ export const handleSaveDrop = async (req: Request, res: Response) => {
       });
     }
 
-    const drop = buildDropFromInput({ input, existing });
+    // Resolve accessory display names from the live ecosystem inventory and
+    // store them on the drop. Lets a drop copied into a different ecosystem
+    // (where accessory ids don't match) still match its items by exact name.
+    const inventoryItems =
+      input.unlockType === "accessory" ? await getCachedInventoryItems({ credentials }) : undefined;
+    const drop = buildDropFromInput({ input, existing, inventoryItems });
 
     const validationError = validateDropInput(drop);
     if (validationError) return res.status(400).json({ success: false, message: validationError });
