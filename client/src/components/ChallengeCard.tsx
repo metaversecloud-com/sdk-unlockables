@@ -71,6 +71,7 @@ export const ChallengeCard = ({
   const accessories = drop.accessories || [];
   const typeLabel = TYPE_LABELS[drop.unlockType] || "Reward";
   const isFreeText = questionType === "text" || questionType === "open_text";
+  const isMultiSelect = questionType === "all_that_apply";
 
   useEffect(() => {
     if (!wrongAttempt) return;
@@ -186,27 +187,34 @@ export const ChallengeCard = ({
             disabled={isSubmitting}
           />
         ) : (
-          <div className="grid gap-2.5">
-            {options.map((option, index) => (
-              <label key={index} className={`option-card ${selectedAnswers.includes(index) ? "selected" : ""}`}>
-                <input
-                  type={questionType === "multiple_choice" ? "radio" : "checkbox"}
-                  name={`answer-${drop.id}`}
-                  checked={selectedAnswers.includes(index)}
-                  onChange={() => toggleOption(index)}
-                  disabled={isSubmitting}
-                  className="sr-only"
-                />
-                <div
-                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                    selectedAnswers.includes(index) ? "border-accent bg-accent" : "border-warm-border"
-                  }`}
-                >
-                  {selectedAnswers.includes(index) && <CheckMark />}
-                </div>
-                <span className="font-medium text-sm">{option}</span>
-              </label>
-            ))}
+          <div className="flex flex-col gap-2.5">
+            {isMultiSelect && (
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft text-center">
+                Select all that apply
+              </p>
+            )}
+            <div className="grid gap-2.5">
+              {options.map((option, index) => (
+                <label key={index} className={`option-card ${selectedAnswers.includes(index) ? "selected" : ""}`}>
+                  <input
+                    type={isMultiSelect ? "checkbox" : "radio"}
+                    name={`answer-${drop.id}`}
+                    checked={selectedAnswers.includes(index)}
+                    onChange={() => toggleOption(index)}
+                    disabled={isSubmitting}
+                    className="sr-only"
+                  />
+                  <div
+                    className={`w-5 h-5 ${isMultiSelect ? "rounded-md" : "rounded-full"} border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                      selectedAnswers.includes(index) ? "border-accent bg-accent" : "border-warm-border"
+                    }`}
+                  >
+                    {selectedAnswers.includes(index) && <CheckMark />}
+                  </div>
+                  <span className="font-medium text-sm">{option}</span>
+                </label>
+              ))}
+            </div>
           </div>
         )}
 
