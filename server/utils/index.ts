@@ -8,5 +8,6 @@ export * from "./errorHandler.js";
 export * from "./getCredentials.js";
 export * from "./getVersion.js";
 export * from "./inventoryCache.js";
+export * from "./resolveInventoryItem.js";
 export * from "./topiaInit.js";
 export * from "./uploadEmotePreview.js";

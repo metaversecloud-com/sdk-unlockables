@@ -64,9 +64,13 @@ export const handleUnlockAttempt = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: "Oops! That's not right. Try again!" });
     }
 
-    const { alreadyOwned, grantedNames } = await grantDropReward({ credentials, visitor, drop });
+    const { alreadyOwned, grantedNames, backfillPatch } = await grantDropReward({ credentials, visitor, drop });
 
-    const dataUpdate: Record<string, any> = { ...attemptsUpdate };
+    // Merge any cross-ecosystem self-heal patch (e.g. accessoryIds that
+    // resolved via name-fallback carry forward the new ecosystem's ids)
+    // into the same write that records the unlock stats. See
+    // `resolveInventoryItem` + `grantDropReward`.
+    const dataUpdate: Record<string, any> = { ...attemptsUpdate, ...backfillPatch };
 
     if (drop.questionType === "open_text" && password) {
       dataUpdate[`drops.${dropId}.responses.${profileId}`] = {

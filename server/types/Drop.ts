@@ -41,6 +41,16 @@ export interface Drop {
   // accessory
   packId?: string;
   accessoryIds?: string[];
+  /**
+   * Display names of each accessory, parallel-indexed to `accessoryIds`.
+   * Stored at save time so a drop whose data-object is transferred into a
+   * different ecosystem (where the inventory ids don't match) can still
+   * resolve its accessories by exact name. Absent on legacy drops created
+   * before this field existed — those still work in their native ecosystem
+   * via the id fast path and self-heal on first successful cross-ecosystem
+   * grant. See `resolveInventoryItem` + the backfill in `grantDropReward`.
+   */
+  accessoryNames?: string[];
 
   // badge
   badgeId?: string;
