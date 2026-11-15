@@ -85,7 +85,6 @@ test("a retired (inactive) badge is never granted", async ({ page, world }) => {
 });
 
 test("an emote the player already owns is reported as already owned, not counted again", async ({ page, world }) => {
-  test.fail(true, "EXP-452: grantExpression errors are swallowed, so the 409 already-owned check never runs");
   await world.seed({ assetData: unlockData([drop("d1")]), visitor: { expressions: ["emote-wave"] } });
 
   const response = await unlock(page, world, "d1");
