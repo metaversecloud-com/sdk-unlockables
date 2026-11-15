@@ -287,8 +287,7 @@ test("an emote preview from outside S3 is mirrored into the app's bucket", async
   expect(response.ok()).toBe(true);
   const [saved] = Object.values((await world.assetData()).drops) as any[];
   expect(saved.itemPreviewUrl).toBe(`https://e2e_bucket.s3.us-east-1.amazonaws.com/${name}.png`);
-  const s3 = await (await page.request.get(`${MOCK_TOPIA_URL}/__mock/s3`)).json();
-  expect(s3.objects[`${name}.png`]).toMatchObject({ bucket: "e2e_bucket", contentType: "image/png" });
+  expect((await world.s3Objects()).find((o) => o.key === `${name}.png`)).toMatchObject({ bucket: "e2e_bucket", contentType: "image/png" });
 });
 
 test("opening the admin list prunes drops that ended over 90 days ago", async ({ page, world }) => {

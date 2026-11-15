@@ -99,7 +99,7 @@ test("an emote the player already owns is reported as already owned, not counted
 
 test("a failed emote grant is not reported as an unlock", async ({ page, world }) => {
   test.fail(true, "EXP-452: grantExpression errors are swallowed and the player is told they unlocked it");
-  await world.seed({ assetData: unlockData([drop("d1")]), visitor: { failGrantExpression: 500 } });
+  await world.seed({ assetData: unlockData([drop("d1")]), failures: { "grant-expression": 500 } });
 
   const response = await unlock(page, world, "d1");
 
