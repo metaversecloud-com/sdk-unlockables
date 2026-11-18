@@ -12,10 +12,13 @@ export const getVisitor = async (credentials: Credentials) => {
 
     return visitor;
   } catch (error) {
-    return errorHandler({
+    // Rethrown, not returned: an `{ error }` result would be treated as a non-admin visitor
+    // ("Admin access required") or fail later with an unrelated error.
+    errorHandler({
       error,
       functionName: "getVisitor",
       message: "Error getting visitor",
     });
+    throw error;
   }
 };

@@ -1,10 +1,12 @@
 import { Request, Response } from "express";
 import {
+  buildClaimLockId,
   DEFAULT_TIMEZONE,
   errorHandler,
   evaluateAnswer,
   getCredentials,
   getDroppedAsset,
+  getClaimGeneration,
   getDropState,
   getVisitor,
   getVisitorClaims,
@@ -13,8 +15,11 @@ import {
   isDropClaimable,
   isDropConfigured,
   recordVisitorClaim,
+  rollBackClaimReservation,
   todayInTimezone,
 } from "../utils/index.js";
+
+const statusOf = (error: any): number | undefined => error?.status || error?.statusCode;
 
 export const handleUnlockAttempt = async (req: Request, res: Response) => {
   try {
@@ -23,6 +28,8 @@ export const handleUnlockAttempt = async (req: Request, res: Response) => {
     const { dropId, password, selectedAnswers } = req.body;
 
     if (!dropId) return res.status(400).json({ success: false, message: "Missing dropId" });
+    // The claim is keyed by profile; without one a player could never be deduplicated.
+    if (!profileId) return res.status(400).json({ success: false, message: "Missing profileId" });
 
     const droppedAsset = await getDroppedAsset(credentials);
     const dataObject = droppedAsset.dataObject;
@@ -44,34 +51,71 @@ export const handleUnlockAttempt = async (req: Request, res: Response) => {
     const visitor = await getVisitor(credentials);
     const claims = await getVisitorClaims(visitor, assetId);
 
-    // Already claimed: never grant or count twice. Without this the aggregate unlockCount could be
-    // inflated by replaying the request, since it no longer dedupes by profile id structurally.
+    // Already claimed: never grant or count twice. This is the cheap path for a replayed request; it
+    // can't catch two requests in flight at once, which the claim lock below handles.
     if (hasClaimedDrop(claims, drop, profileId)) {
       return res.json({ success: true, alreadyClaimed: true, dropId, message: "You've already unlocked this." });
     }
 
     const isCorrect = evaluateAnswer({ drop, password, selectedAnswers });
-    const attemptsUpdate = { [`drops.${dropId}.stats.attempts`]: (drop.stats?.attempts || 0) + 1 };
+    const attemptsPath = `drops.${dropId}.stats.attempts`;
+    const attemptedAnalytic = { analyticName: "unlock_attempted", profileId, uniqueKey: profileId, urlSlug };
 
+    // Counters use the server-side atomic increment, never read-then-write: concurrent answers would
+    // otherwise read the same value and lose updates.
     if (!isCorrect) {
-      await droppedAsset.updateDataObject(attemptsUpdate, {
-        analytics: [
-          { analyticName: "unlock_attempted", profileId, uniqueKey: profileId, urlSlug },
-          { analyticName: "false_responses", profileId, uniqueKey: profileId, urlSlug },
-        ],
+      await droppedAsset.incrementDataObjectValue(attemptsPath, 1, {
+        analytics: [attemptedAnalytic, { analyticName: "false_responses", profileId, uniqueKey: profileId, urlSlug }],
       });
 
       return res.status(400).json({ success: false, message: "Oops! That's not right. Try again!" });
     }
 
-    const { alreadyOwned, grantedNames, backfillPatch } = await grantDropReward({ credentials, visitor, drop });
+    // Reserve the claim before granting. The lock is never released (see buildClaimLockId), so of two
+    // simultaneous correct submissions exactly one gets past here; the other is a duplicate of a claim
+    // that is either done or in progress. The reservation write also counts this attempt.
+    const generation = getClaimGeneration(visitor, assetId, dropId);
+    try {
+      await droppedAsset.incrementDataObjectValue(attemptsPath, 1, {
+        analytics: [attemptedAnalytic],
+        lock: { lockId: buildClaimLockId(dropId, profileId, generation) },
+      });
+    } catch (error: any) {
+      if (statusOf(error) === 409) {
+        return res.json({ success: true, alreadyClaimed: true, dropId, message: "You've already unlocked this." });
+      }
+      throw error;
+    }
 
-    // Merge any cross-ecosystem self-heal patch (e.g. accessoryIds that
-    // resolved via name-fallback carry forward the new ecosystem's ids)
-    // into the same write that records the unlock stats. See
-    // `resolveInventoryItem` + `grantDropReward`.
-    const dataUpdate: Record<string, any> = { ...attemptsUpdate, ...backfillPatch };
+    let grantResult;
+    try {
+      grantResult = await grantDropReward({ credentials, visitor, drop });
+    } catch (error) {
+      // Nothing was granted: free the claim so the player can try again, and record/count nothing.
+      await rollBackClaimReservation(visitor, assetId, dropId, generation);
+      throw error;
+    }
+    const { alreadyOwned, grantedNames, backfillPatch } = grantResult;
 
+    const successAnalytics = [
+      { analyticName: "completions", profileId, uniqueKey: profileId, urlSlug },
+      { analyticName: "unlock_succeeded", profileId, uniqueKey: profileId, urlSlug },
+    ];
+
+    // A reward the player already owned is not a new unlock: no unlockCount, no `<type>_granted`.
+    if (!alreadyOwned) {
+      await droppedAsset.incrementDataObjectValue(`drops.${dropId}.stats.unlockCount`, 1, {
+        analytics: [
+          ...successAnalytics,
+          { analyticName: `${drop.unlockType}_granted`, profileId, uniqueKey: profileId, urlSlug },
+        ],
+      });
+    }
+
+    // Plain field writes only (no counters), so no lock is needed. Any cross-ecosystem self-heal patch
+    // (see `resolveInventoryItem` + `grantDropReward`) rides along with the open-text response, and the
+    // already-owned path's analytics ride on this write instead of the skipped increment.
+    const dataUpdate: Record<string, any> = { ...backfillPatch };
     if (drop.questionType === "open_text" && password) {
       dataUpdate[`drops.${dropId}.responses.${profileId}`] = {
         displayName,
@@ -79,28 +123,9 @@ export const handleUnlockAttempt = async (req: Request, res: Response) => {
         respondedAt: new Date().toISOString(),
       };
     }
-
-    const analytics = [
-      { analyticName: "unlock_attempted", profileId, uniqueKey: profileId, urlSlug },
-      { analyticName: "completions", profileId, uniqueKey: profileId, urlSlug },
-      { analyticName: "unlock_succeeded", profileId, uniqueKey: profileId, urlSlug },
-    ];
-
-    if (!alreadyOwned) {
-      analytics.push({
-        analyticName: `${drop.unlockType}_granted`,
-        profileId,
-        uniqueKey: profileId,
-        urlSlug,
-      });
-      dataUpdate[`drops.${dropId}.stats.unlockCount`] = (drop.stats?.unlockCount || 0) + 1;
+    if (alreadyOwned || Object.keys(dataUpdate).length) {
+      await droppedAsset.updateDataObject(dataUpdate, { analytics: alreadyOwned ? successAnalytics : [] });
     }
-
-    // unlockCount is a denormalised counter, so the success write takes the lock. Concurrent unlocks
-    // could otherwise read the same value and lose an increment; the visitor claim records remain the
-    // authoritative record of who unlocked what.
-    const lockId = `${assetId}-${dropId}-${Math.round(Date.now() / 1000)}`;
-    await droppedAsset.updateDataObject(dataUpdate, { analytics, lock: { lockId, releaseLock: true } });
 
     // Recorded even when already owned, so the challenge stops reappearing for this visitor.
     await recordVisitorClaim(visitor, assetId, dropId);

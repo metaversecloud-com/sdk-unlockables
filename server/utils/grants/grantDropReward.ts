@@ -49,15 +49,19 @@ const fetchFreshInventoryItems = async (credentials: Credentials): Promise<any[]
 };
 
 const grantEmote = async (visitor: any, drop: Drop): Promise<GrantResult> => {
-  const response = await visitor
-    .grantExpression({ id: drop.itemId })
-    .catch((error: any) => console.error("Unlock with itemId failed", error?.message));
-
   const name = drop.itemName || "emote";
 
-  if (response?.statusCode === 409) {
-    alreadyUnlockedToast(visitor, "You've already unlocked this emote! Click on your avatar to use it.");
-    return { alreadyOwned: true, grantedNames: [name], backfillPatch: {} };
+  // The SDK throws on any non-2xx (already owned arrives as a thrown 409), so the outcome is decided
+  // in the catch: 409 is "already owned", anything else must propagate so the caller neither
+  // celebrates nor records/counts an unlock the player didn't get.
+  try {
+    await visitor.grantExpression({ id: drop.itemId });
+  } catch (error: any) {
+    if (statusOf(error) === 409) {
+      alreadyUnlockedToast(visitor, "You've already unlocked this emote! Click on your avatar to use it.");
+      return { alreadyOwned: true, grantedNames: [name], backfillPatch: {} };
+    }
+    throw error;
   }
 
   celebrate(visitor, "Congrats! Emote Unlocked", "You just unlocked a new emote! Click on your avatar to test it out.");
@@ -122,6 +126,10 @@ const grantBadge = async (credentials: Credentials, visitor: any, drop: Drop): P
 
   if (!resolved) throw new Error("Badge not found in inventory catalog");
   const badge = resolved.item;
+
+  // The fresh fetch isn't filtered like the editor's cached list, so a drop configured before its
+  // badge was retired would otherwise keep granting it.
+  if (badge.status === "INACTIVE") throw new Error("This badge has been retired and can no longer be earned");
 
   const name = badge.name || drop.badgeName || "badge";
 
