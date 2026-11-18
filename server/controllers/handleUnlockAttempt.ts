@@ -91,8 +91,14 @@ export const handleUnlockAttempt = async (req: Request, res: Response) => {
     try {
       grantResult = await grantDropReward({ credentials, visitor, drop });
     } catch (error) {
-      // Nothing was granted: free the claim so the player can try again, and record/count nothing.
-      await rollBackClaimReservation(visitor, assetId, dropId, generation);
+      // Nothing was granted: free the claim so the player can try again, and record/count nothing. The
+      // reservation counted this attempt, so take it back off; a server-side failure isn't a player attempt.
+      await Promise.all([
+        rollBackClaimReservation(visitor, assetId, dropId, generation),
+        droppedAsset
+          .incrementDataObjectValue(attemptsPath, -1)
+          .catch((rollbackError: any) => console.error(`Error uncounting attempt for drop ${dropId}`, rollbackError)),
+      ]);
       throw error;
     }
     const { alreadyOwned, grantedNames, backfillPatch } = grantResult;

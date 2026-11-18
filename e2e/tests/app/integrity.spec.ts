@@ -125,7 +125,6 @@ test.describe("concurrent players", () => {
   const slowAssetWrites = { "/assets/key-asset/update-data-object": 300 };
 
   test("two wrong answers at once count as two attempts", async ({ page, world }) => {
-    test.fail(true, "EXP-452: attempts is a read-modify-write without a lock or increment");
     await world.seed({ assetData: unlockData([drop("d1")]), otherVisitors: { 43: {} }, delays: slowAssetWrites });
 
     await Promise.all([
@@ -137,7 +136,6 @@ test.describe("concurrent players", () => {
   });
 
   test("two players unlocking at once both count", async ({ page, world }) => {
-    test.fail(true, "EXP-452: unlockCount is read before the lock is taken, so one unlock is lost");
     await world.seed({ assetData: unlockData([badgeDrop("b1")]), otherVisitors: { 43: {} }, delays: slowAssetWrites });
 
     const responses = await Promise.all([
@@ -151,7 +149,6 @@ test.describe("concurrent players", () => {
   });
 
   test("the same answer sent twice at once grants and counts once", async ({ page, world }) => {
-    test.fail(true, "EXP-452: the claim is checked before the grant and recorded after it, with nothing in between");
     await world.seed({ assetData: unlockData([badgeDrop("b1")]), delays: slowAssetWrites });
 
     await Promise.all([

@@ -76,7 +76,6 @@ test("a reward missing from the catalog fails without claiming or counting", asy
 });
 
 test("a retired (inactive) badge is never granted", async ({ page, world }) => {
-  test.fail(true, "EXP-452: grants read the fresh inventory without dropping INACTIVE items");
   await world.seed({ assetData: unlockData([badgeDrop("b1", { badgeId: "badge-retired", badgeName: "Retired Badge" })]) });
 
   await unlock(page, world, "b1");
@@ -97,7 +96,6 @@ test("an emote the player already owns is reported as already owned, not counted
 });
 
 test("a failed emote grant is not reported as an unlock", async ({ page, world }) => {
-  test.fail(true, "EXP-452: grantExpression errors are swallowed and the player is told they unlocked it");
   await world.seed({ assetData: unlockData([drop("d1")]), failures: { "grant-expression": 500 } });
 
   const response = await unlock(page, world, "d1");

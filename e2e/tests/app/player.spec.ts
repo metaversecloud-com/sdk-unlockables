@@ -11,9 +11,7 @@ test("shows the empty state when there is no live challenge", async ({ page, wor
 });
 
 test("opened outside a Topia world, the app doesn't stay on the loading screen", async ({ page }) => {
-  test.fail(true, "EXP-452: without credentials the page spins on Loading forever");
   await page.goto("/");
-  await expect(page.getByText("Loading...")).toBeVisible();
 
   // Anything but an endless spinner: an explanation, an error, the empty app.
   await expect(page.getByText("Loading...")).toBeHidden({ timeout: 4000 });

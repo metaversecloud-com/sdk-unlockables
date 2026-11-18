@@ -51,18 +51,24 @@ const fetchFreshInventoryItems = async (credentials: Credentials): Promise<any[]
 const grantEmote = async (visitor: any, drop: Drop): Promise<GrantResult> => {
   const name = drop.itemName || "emote";
 
-  // The SDK throws on any non-2xx (already owned arrives as a thrown 409), so the outcome is decided
-  // in the catch: 409 is "already owned", anything else must propagate so the caller neither
-  // celebrates nor records/counts an unlock the player didn't get.
+  // public-api answers an owned (409) or unknown (404) expression with a 200 whose body carries the
+  // error's statusCode, so the SDK resolves; other failures arrive as a thrown non-2xx. Check both:
+  // 409 is "already owned", anything else must propagate so the caller neither celebrates nor
+  // records/counts an unlock the player didn't get.
+  let status: number | undefined;
   try {
-    await visitor.grantExpression({ id: drop.itemId });
+    const response = await visitor.grantExpression({ id: drop.itemId });
+    status = response?.statusCode;
   } catch (error: any) {
-    if (statusOf(error) === 409) {
-      alreadyUnlockedToast(visitor, "You've already unlocked this emote! Click on your avatar to use it.");
-      return { alreadyOwned: true, grantedNames: [name], backfillPatch: {} };
-    }
-    throw error;
+    status = statusOf(error);
+    if (status !== 409) throw error;
   }
+
+  if (status === 409) {
+    alreadyUnlockedToast(visitor, "You've already unlocked this emote! Click on your avatar to use it.");
+    return { alreadyOwned: true, grantedNames: [name], backfillPatch: {} };
+  }
+  if (status && status >= 400) throw { status, message: `Unable to grant emote (status ${status})` };
 
   celebrate(visitor, "Congrats! Emote Unlocked", "You just unlocked a new emote! Click on your avatar to test it out.");
   return { alreadyOwned: false, grantedNames: [name], backfillPatch: {} };

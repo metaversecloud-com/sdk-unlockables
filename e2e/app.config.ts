@@ -67,7 +67,6 @@ export type RouteSpec = {
 
 // getCredentials (protected file) returns { error } instead of throwing, so every route that
 // uses it has this bug until it's fixed there.
-const GET_CREDENTIALS_DOESNT_THROW = "EXP-428 #6: getCredentials doesn't throw";
 
 /**
  * API routes that read the session credentials (getCredentials). Each one must reject missing or
@@ -77,7 +76,7 @@ const GET_CREDENTIALS_DOESNT_THROW = "EXP-428 #6: getCredentials doesn't throw";
  * the platform tests can't read its body and time out. Cover an SSE route's credential checks in
  * tests/app instead (open it with page.request or fetch + AbortController and check the status).
  */
-const BUGS: KnownBugs = { unnamedCredentialError: GET_CREDENTIALS_DOESNT_THROW };
+const BUGS: KnownBugs = {};
 
 // The seeded key asset holds no drops, so the drop-specific routes answer 404 with valid credentials.
 export const CREDENTIALED_ROUTES: RouteSpec[] = [
