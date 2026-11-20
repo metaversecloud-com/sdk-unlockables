@@ -65,9 +65,6 @@ export type RouteSpec = {
   knownBugs?: KnownBugs;
 };
 
-// getCredentials (protected file) returns { error } instead of throwing, so every route that
-// uses it has this bug until it's fixed there.
-
 /**
  * API routes that read the session credentials (getCredentials). Each one must reject missing or
  * foreign credentials and must never send the interactive secret to the browser. List them all.
@@ -76,18 +73,16 @@ export type RouteSpec = {
  * the platform tests can't read its body and time out. Cover an SSE route's credential checks in
  * tests/app instead (open it with page.request or fetch + AbortController and check the status).
  */
-const BUGS: KnownBugs = {};
-
 // The seeded key asset holds no drops, so the drop-specific routes answer 404 with valid credentials.
 export const CREDENTIALED_ROUTES: RouteSpec[] = [
-  { method: "get", path: "/game-state", knownBugs: BUGS },
-  { method: "post", path: "/unlock/attempt", data: { dropId: "drop-missing", password: "x" }, knownBugs: BUGS },
-  { method: "get", path: "/drops", knownBugs: BUGS },
-  { method: "post", path: "/drops", data: { unlockType: "badge", badgeId: "badge-1" }, knownBugs: BUGS },
-  { method: "put", path: "/drops/drop-missing", data: { unlockType: "badge" }, knownBugs: BUGS },
-  { method: "delete", path: "/drops/drop-missing", knownBugs: BUGS },
-  { method: "post", path: "/drops/drop-missing/duplicate", knownBugs: BUGS },
-  { method: "get", path: "/unlockables", knownBugs: BUGS },
+  { method: "get", path: "/game-state" },
+  { method: "post", path: "/unlock/attempt", data: { dropId: "drop-missing", password: "x" } },
+  { method: "get", path: "/drops" },
+  { method: "post", path: "/drops", data: { unlockType: "badge", badgeId: "badge-1" } },
+  { method: "put", path: "/drops/drop-missing", data: { unlockType: "badge" } },
+  { method: "delete", path: "/drops/drop-missing" },
+  { method: "post", path: "/drops/drop-missing/duplicate" },
+  { method: "get", path: "/unlockables" },
 ];
 
 /**
@@ -144,10 +139,7 @@ export const HEALTH_KNOWN_BUGS: { incompleteContract?: string } = {};
  * registers its own logging handler. Fix: process.removeAllListeners("unhandledRejection") before
  * registering the app's handler.
  */
-export const PROCESS_KNOWN_BUGS: { exitsOnUnhandledRejection?: string } = {
-  exitsOnUnhandledRejection:
-    "EXP-472: @rtsdk/topia's unhandledRejection hook calls process.exit(1); server/index.ts's handler doesn't stop it",
-};
+export const PROCESS_KNOWN_BUGS: { exitsOnUnhandledRejection?: string } = {};
 
 /**
  * The request system.spec sends a malformed JSON body to. Default: the first POST/PUT route in
@@ -163,9 +155,7 @@ export const MALFORMED_JSON_REQUEST: { method: "post" | "put"; path: string } | 
  * middleware after express.json()). Fix: an error middleware that answers body-parser errors
  * (err.type === "entity.parse.failed") with res.status(400).json({ success: false, error: "Invalid JSON" }).
  */
-export const ERROR_KNOWN_BUGS: { malformedJson?: string } = {
-  malformedJson: "EXP-473: no error middleware: Express' default error page shows the stack trace (NODE_ENV isn't production)",
-};
+export const ERROR_KNOWN_BUGS: { malformedJson?: string } = {};
 
 /**
  * true starts mock-redis/server.mjs (an in-memory Redis) next to mock-topia and points REDIS_URL at it
