@@ -1,15 +1,23 @@
 import { Credentials } from "../types/Credentials.js";
 
-// Throws when the credentials are missing or belong to another app; the calling route's catch answers the request.
+/**
+ * Thrown (never returned) so a bad or missing credential stops the request at the controller's
+ * catch block and reaches the client as a credential error, instead of an `{ error }` object
+ * flowing on as if it were credentials and failing later as "Admin access required" or a Topia
+ * API error. `message` is an own enumerable property so it survives JSON serialization in the
+ * error response; `status` sets the HTTP code via `errorHandler`.
+ */
+const credentialsError = (status: number, message: string) => ({ status, message, functionName: "getCredentials" });
+
 export const getCredentials = (query: any): Credentials => {
   const requiredFields = ["interactiveNonce", "interactivePublicKey", "urlSlug", "visitorId"];
-  const missingFields = requiredFields.filter((variable) => !query[variable]);
+  const missingFields = requiredFields.filter((variable) => !query?.[variable]);
   if (missingFields.length > 0) {
-    throw `Missing required body parameters: ${missingFields.join(", ")}`;
+    throw credentialsError(400, `Missing required parameters: ${missingFields.join(", ")}`);
   }
 
   if (process.env.INTERACTIVE_KEY !== query.interactivePublicKey) {
-    throw "Provided public key does not match";
+    throw credentialsError(401, "Provided public key does not match");
   }
 
   return {

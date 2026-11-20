@@ -43,6 +43,17 @@ const Home = () => {
 
   if (!hasSetupBackend) return <div />;
 
+  // No Topia launch params (opened directly rather than from a world): the game-state request never
+  // fires, so without this the page would sit on the loading screen forever.
+  if (!hasInteractiveParams) {
+    return (
+      <div className="flex flex-col items-center justify-center text-center p-6 gap-2">
+        <h2 className="h2">Open from a Topia world</h2>
+        <p className="p2">Unlockables only works when it's opened from an object inside a Topia world.</p>
+      </div>
+    );
+  }
+
   return (
     <PageContainer isLoading={isLoading}>
       <h2 className="text-center text-2xl mb-5">Unlock Challenges</h2>
