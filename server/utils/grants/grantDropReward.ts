@@ -49,16 +49,26 @@ const fetchFreshInventoryItems = async (credentials: Credentials): Promise<any[]
 };
 
 const grantEmote = async (visitor: any, drop: Drop): Promise<GrantResult> => {
-  const response = await visitor
-    .grantExpression({ id: drop.itemId })
-    .catch((error: any) => console.error("Unlock with itemId failed", error?.message));
-
   const name = drop.itemName || "emote";
 
-  if (response?.statusCode === 409) {
+  // public-api answers an owned (409) or unknown (404) expression with a 200 whose body carries the
+  // error's statusCode, so the SDK resolves; other failures arrive as a thrown non-2xx. Check both:
+  // 409 is "already owned", anything else must propagate so the caller neither celebrates nor
+  // records/counts an unlock the player didn't get.
+  let status: number | undefined;
+  try {
+    const response = await visitor.grantExpression({ id: drop.itemId });
+    status = response?.statusCode;
+  } catch (error: any) {
+    status = statusOf(error);
+    if (status !== 409) throw error;
+  }
+
+  if (status === 409) {
     alreadyUnlockedToast(visitor, "You've already unlocked this emote! Click on your avatar to use it.");
     return { alreadyOwned: true, grantedNames: [name], backfillPatch: {} };
   }
+  if (status && status >= 400) throw { status, message: `Unable to grant emote (status ${status})` };
 
   celebrate(visitor, "Congrats! Emote Unlocked", "You just unlocked a new emote! Click on your avatar to test it out.");
   return { alreadyOwned: false, grantedNames: [name], backfillPatch: {} };
@@ -122,6 +132,10 @@ const grantBadge = async (credentials: Credentials, visitor: any, drop: Drop): P
 
   if (!resolved) throw new Error("Badge not found in inventory catalog");
   const badge = resolved.item;
+
+  // The fresh fetch isn't filtered like the editor's cached list, so a drop configured before its
+  // badge was retired would otherwise keep granting it.
+  if (badge.status === "INACTIVE") throw new Error("This badge has been retired and can no longer be earned");
 
   const name = badge.name || drop.badgeName || "badge";
 

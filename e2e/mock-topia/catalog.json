@@ -1,0 +1,88 @@
+[
+  {
+    "id": "badge-1",
+    "name": "Perfect Score",
+    "type": "BADGE",
+    "status": "ACTIVE",
+    "description": "Perfect Score badge",
+    "image_path": "https://example.invalid/badges/1.png"
+  },
+  {
+    "id": "badge-2",
+    "name": "Lightning Round",
+    "type": "BADGE",
+    "status": "ACTIVE",
+    "description": "Lightning Round badge",
+    "image_path": "https://example.invalid/badges/2.png"
+  },
+  {
+    "id": "badge-3",
+    "name": "Quiz Master",
+    "type": "BADGE",
+    "status": "ACTIVE",
+    "description": "Quiz Master badge",
+    "image_path": "https://example.invalid/badges/3.png"
+  },
+  {
+    "id": "badge-4",
+    "name": "Top 3 Finisher",
+    "type": "BADGE",
+    "status": "ACTIVE",
+    "description": "Top 3 Finisher badge",
+    "image_path": "https://example.invalid/badges/4.png"
+  },
+  {
+    "id": "pack-pirate",
+    "name": "Pirate Pack",
+    "type": "AVATAR_ACCESSORY_PACK",
+    "status": "ACTIVE",
+    "description": "Arr",
+    "image_path": "https://example.invalid/packs/pirate.png",
+    "metadata": {
+      "packId": "pirate"
+    }
+  },
+  {
+    "id": "acc-hat",
+    "name": "Pirate Hat",
+    "type": "ACCESSORY",
+    "status": "ACTIVE",
+    "image_path": "https://example.invalid/accessories/acc-hat.png",
+    "metadata": {
+      "packId": "pirate",
+      "category": "hat",
+      "displayName": "Pirate Hat"
+    }
+  },
+  {
+    "id": "acc-patch",
+    "name": "Eye Patch",
+    "type": "ACCESSORY",
+    "status": "ACTIVE",
+    "image_path": "https://example.invalid/accessories/acc-patch.png",
+    "metadata": {
+      "packId": "pirate",
+      "category": "face",
+      "displayName": "Eye Patch"
+    }
+  },
+  {
+    "id": "acc-hook",
+    "name": "Hook",
+    "type": "ACCESSORY",
+    "status": "ACTIVE",
+    "image_path": "https://example.invalid/accessories/acc-hook.png",
+    "metadata": {
+      "packId": "pirate",
+      "category": "hand",
+      "displayName": "Hook"
+    }
+  },
+  {
+    "id": "badge-retired",
+    "name": "Retired Badge",
+    "type": "BADGE",
+    "status": "INACTIVE",
+    "image_path": ""
+  }
+]
